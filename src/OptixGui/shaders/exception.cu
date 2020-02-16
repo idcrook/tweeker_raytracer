@@ -26,27 +26,27 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "app_config.cuh"
 
-#ifndef MATERIAL_PARAMETER_CUH
-#define MATERIAL_PARAMETER_CUH
+#include <optix.h>
 
-#include "function_indices.cuh"
+rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
 
-// Just some hardcoded material parameter system which allows to show a few fundamental BSDFs.
-// Alignment of all data types used here is 4 bytes.
-struct MaterialParameter
+rtDeclareVariable(uint2, theLaunchIndex, rtLaunchIndex, );
+
+RT_PROGRAM void exception()
 {
-  FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
-  optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
-  int           albedoID;   // Bindless 2D texture ID used to modulate the albedo color when != RT_TEXTURE_ID_NULL.
-  int           cutoutID;   // Bindless 2D texture ID used to calculate the cutout opacity when != RT_TEXTURE_ID_NULL.
-  optix::float3 absorption; // Absorption coefficient
-  float         ior;        // Index of refraction
-  unsigned int  flags;      // Thin-walled on/off
-
-  // Manual padding to 16-byte alignment goes here.
-  float unused0;
-};
-
-#endif // MATERIAL_PARAMETER_CUH
+#if USE_DEBUG_EXCEPTIONS
+  const unsigned int code = rtGetExceptionCode();
+  if (RT_EXCEPTION_USER <= code)
+  {
+    rtPrintf("User exception %d at (%d, %d)\n", code - RT_EXCEPTION_USER, theLaunchIndex.x, theLaunchIndex.y);
+  }
+  else
+  {
+    rtPrintf("Exception code 0x%X at (%d, %d)\n", code, theLaunchIndex.x, theLaunchIndex.y);
+  }
+  // RGBA32F super magenta as error color (makes sure this isn't accumulated away in a progressive renderer).
+  sysOutputBuffer[theLaunchIndex] = make_float4(1000000.0f, 0.0f, 1000000.0f, 1.0f);
+#endif
+}

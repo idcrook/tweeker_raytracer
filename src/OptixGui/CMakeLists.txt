@@ -35,6 +35,7 @@ set(CMAKE_MODULE_PATH
 # for local source includes and devil
 INCLUDE_DIRECTORIES(
   "."
+  # "include"
   ${IL_INCLUDE_DIR}
   )
 
@@ -70,32 +71,32 @@ find_package(OpenGL REQUIRED)
 find_package(DevIL REQUIRED)
 
 
-cuda_compile_and_embed( raygen_ptx_c   raygen/raygen.cu )
-cuda_compile_and_embed(   miss_ptx_c     raygen/miss.cu )
+# cuda_compile_and_embed( raygen_ptx_c   raygen/raygen.cu )
+# cuda_compile_and_embed(   miss_ptx_c     raygen/miss.cu )
 
-cuda_compile_and_embed(  sphere_ptx_c          geometry/sphere.cu )
-cuda_compile_and_embed( moving_sphere_ptx_c   geometry/movingSphere.cu )
-cuda_compile_and_embed( volume_sphere_ptx_c   geometry/volumeSphere.cu )
-cuda_compile_and_embed( aarect_ptx_c          geometry/aarect.cu )
-cuda_compile_and_embed( volume_box_ptx_c      geometry/volumeBox.cu )
+# cuda_compile_and_embed(  sphere_ptx_c          geometry/sphere.cu )
+# cuda_compile_and_embed( moving_sphere_ptx_c   geometry/movingSphere.cu )
+# cuda_compile_and_embed( volume_sphere_ptx_c   geometry/volumeSphere.cu )
+# cuda_compile_and_embed( aarect_ptx_c          geometry/aarect.cu )
+# cuda_compile_and_embed( volume_box_ptx_c      geometry/volumeBox.cu )
 
-cuda_compile_and_embed( normal_material_ptx_c     material/normalMaterial.cu  )
-cuda_compile_and_embed( lambertian_material_ptx_c material/lambertianMaterial.cu  )
-cuda_compile_and_embed( metal_material_ptx_c      material/metalMaterial.cu  )
-cuda_compile_and_embed( dielectric_material_ptx_c material/dielectricMaterial.cu  )
-cuda_compile_and_embed( diffuse_light_material_ptx_c material/diffuseLight.cu  )
-cuda_compile_and_embed( isotropic_material_ptx_c  material/isotropicMaterial.cu  )
+# cuda_compile_and_embed( normal_material_ptx_c     material/normalMaterial.cu  )
+# cuda_compile_and_embed( lambertian_material_ptx_c material/lambertianMaterial.cu  )
+# cuda_compile_and_embed( metal_material_ptx_c      material/metalMaterial.cu  )
+# cuda_compile_and_embed( dielectric_material_ptx_c material/dielectricMaterial.cu  )
+# cuda_compile_and_embed( diffuse_light_material_ptx_c material/diffuseLight.cu  )
+# cuda_compile_and_embed( isotropic_material_ptx_c  material/isotropicMaterial.cu  )
 
-cuda_compile_and_embed( null_texture_ptx_c        texture/nullTexture.cu  )
-cuda_compile_and_embed( constant_texture_ptx_c    texture/constantTexture.cu  )
-cuda_compile_and_embed( checkered_texture_ptx_c   texture/checkeredTexture.cu  )
-cuda_compile_and_embed( noise_texture_ptx_c       texture/noiseTexture.cu  )
-cuda_compile_and_embed( image_texture_ptx_c       texture/imageTexture.cu  )
+# cuda_compile_and_embed( null_texture_ptx_c        texture/nullTexture.cu  )
+# cuda_compile_and_embed( constant_texture_ptx_c    texture/constantTexture.cu  )
+# cuda_compile_and_embed( checkered_texture_ptx_c   texture/checkeredTexture.cu  )
+# cuda_compile_and_embed( noise_texture_ptx_c       texture/noiseTexture.cu  )
+# cuda_compile_and_embed( image_texture_ptx_c       texture/imageTexture.cu  )
 
-cuda_compile_and_embed( cosine_pdf_ptx_c  pdf/cosinePdf.cu )
-cuda_compile_and_embed( rect_pdf_ptx_c    pdf/rectPdf.cu )
-cuda_compile_and_embed( mixture_pdf_ptx_c      pdf/mixturePdf.cu )
-cuda_compile_and_embed( mixture_bias_pdf_ptx_c pdf/mixtureBiasPdf.cu )
+# cuda_compile_and_embed( cosine_pdf_ptx_c  pdf/cosinePdf.cu )
+# cuda_compile_and_embed( rect_pdf_ptx_c    pdf/rectPdf.cu )
+# cuda_compile_and_embed( mixture_pdf_ptx_c      pdf/mixturePdf.cu )
+# cuda_compile_and_embed( mixture_bias_pdf_ptx_c pdf/mixtureBiasPdf.cu )
 
 
 ##################################################################
@@ -126,72 +127,128 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/sutil
 
 set(SAMPLES_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/device_include)
 
+#########################################################
+# OPTIX_add_sample_executable
+#
+# Convience function for adding samples to the code.  You can copy the contents of this
+# funtion into your individual project if you wish to customize the behavior.  Note that
+# in CMake, functions have their own scope, whereas macros use the scope of the caller.
+function(OPTIX_add_sample_executable target_name)
+
+  # These calls will group PTX and CUDA files into their own directories in the Visual
+  # Studio projects.
+  source_group("PTX Files"  REGULAR_EXPRESSION ".+\\.ptx$")
+  source_group("CUDA Files" REGULAR_EXPRESSION ".+\\.cu$")
+
+  # Separate the sources from the CMake and CUDA options fed to the macro.  This code
+  # comes from the CUDA_COMPILE_PTX macro found in FindCUDA.cmake.  We are copying the
+  # code here, so that we can use our own name for the target.  target_name is used in the
+  # creation of the output file names, and we want this to be unique for each target in
+  # the SDK.
+  CUDA_GET_SOURCES_AND_OPTIONS(source_files cmake_options options ${ARGN})
+
+  # Create the rules to build the PTX from the CUDA files.
+  CUDA_WRAP_SRCS( ${target_name} PTX generated_files ${source_files} ${cmake_options}
+    OPTIONS ${options} )
+
+  # Here is where we create the rule to make the executable.  We define a target name and
+  # list all the source files used to create the target.  In addition we also pass along
+  # the cmake_options parsed out of the arguments.
+  add_executable(${target_name}
+    ${source_files}
+    ${generated_files}
+    ${cmake_options}
+    )
+
+  # Most of the samples link against sutil, optix, and glfw.  Here is the
+  # rule that specifies this linkage.
+  target_link_libraries(  ${target_name}
+    sutil_sdk
+    OpenGL::GL
+    imgui::imgui
+    glad::glad
+    glfw::glfw
+    ${optix_LIBRARY}
+    ${IL_LIBRARIES}
+    ${ILU_LIBRARIES}
+    ${ILUT_LIBRARIES}
+  )
+  # target_link_libraries(
+  #   sutil_sdk
+  #   optix
+  #   glfw
+  #   imgui
+  #   ${OPENGL_gl_LIBRARY}
+  #   ${optix_rpath}
+  #   )
+  target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+
+  if(USING_GNU_CXX)
+    target_link_libraries( ${target_name} m ) # Explicitly link against math library (C samples don't do that by default)
+  endif()
+endfunction()
+
+
 # Our sutil library.  The rules to build it are found in the subdirectory.
 add_subdirectory(sutil)
 
-
-add_executable(optixGui
+OPTIX_add_sample_executable( optixIntro_01
   main.cpp
-
-  Director.h
-  Director.cpp
-
-  Application.h
-  Application.cpp
-
-  Box.cpp
-  Parallelogram.cpp
-  Plane.cpp
-  Sphere.cpp
-  Torus.cpp
-
-  Texture.h
-  Texture.cpp
-
-  Timer.h
-  Timer.cpp
-
-  PinholeCamera.h
-  PinholeCamera.cpp
-
-  Picture.h
-  Picture.cpp
 
   bindings/imgui_impl_glfw.cpp
   bindings/imgui_impl_opengl3.cpp
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_opengl3.h
 
-  lib/app_config.cuh
+  include/Application.h
+  Application.cpp
 
-  # Compiled cuda ptx programs
-  ${raygen_ptx_c}
-  ${miss_ptx_c}
+  include/MyAssert.h
 
-  ${sphere_ptx_c}
-  ${moving_sphere_ptx_c}
-  ${aarect_ptx_c}
-  ${volume_box_ptx_c}
-  ${volume_sphere_ptx_c}
+  shaders/app_config.cuh
+  shaders/rt_function.cuh
 
-  ${cosine_pdf_ptx_c}
-  ${rect_pdf_ptx_c}
-  ${mixture_pdf_ptx_c}
-  ${mixture_bias_pdf_ptx_c}
+  shaders/raygeneration.cu
+  shaders/exception.cu
+)
 
-  ${normal_material_ptx_c}
-  ${lambertian_material_ptx_c}
-  ${metal_material_ptx_c}
-  ${dielectric_material_ptx_c}
-  ${diffuse_light_material_ptx_c}
-  ${isotropic_material_ptx_c}
 
-  ${null_texture_ptx_c}
-  ${constant_texture_ptx_c}
-  ${checkered_texture_ptx_c}
-  ${noise_texture_ptx_c}
-  ${image_texture_ptx_c}
-  )
+add_executable(optixGui
+  main.cpp
+
+  include/Application.h
+  Application.cpp
+
+  # Box.cpp
+  # Parallelogram.cpp
+  # Plane.cpp
+  # Sphere.cpp
+  # Torus.cpp
+
+  # Texture.h
+  # Texture.cpp
+
+  # Timer.h
+  # Timer.cpp
+
+  # PinholeCamera.h
+  # PinholeCamera.cpp
+
+  # Picture.h
+  # Picture.cpp
+
+  bindings/imgui_impl_glfw.cpp
+  bindings/imgui_impl_opengl3.cpp
+  bindings/imgui_impl_glfw.h
+  bindings/imgui_impl_opengl3.h
+
+  shaders/app_config.cuh
+  shaders/rt_function.cuh
+
+  shaders/raygeneration.cu
+  shaders/exception.cu
+
+   )
 
 
 target_compile_definitions(optixGui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)

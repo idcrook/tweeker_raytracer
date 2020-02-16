@@ -26,17 +26,28 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "app_config.cuh"
 
-#ifndef FUNCTION_INDICES_CUH
-#define FUNCTION_INDICES_CUH
+#include <optix.h>
+#include <optixu/optixu_math_namespace.h>
 
-enum FunctionIndex
+// Note, the nomenclature used in the device code of all optixIntroduction samples
+// follows some simple rules using prefixes to help indicating the scope and meaning:
+//
+// "sys" = renderer "system"-wide variables, defined at global context scope.
+// "the" = variables with OptiX built-in semantic, like rtLaunchIndex, etc.
+// "var" = "varyings" with developer defined attribute semantic, calculated by the intersection program.
+// "par" = "parameter" variable held at some object scope, not at the global context scope.
+//         (Exception to the last rule are the vertex "attributes" and "indices" held at Geometry nodes.)
+
+rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
+
+rtDeclareVariable(uint2, theLaunchIndex, rtLaunchIndex, );
+
+rtDeclareVariable(float3, sysColorBackground, , );
+
+// Entry point for simple color filling kernel.
+RT_PROGRAM void raygeneration()
 {
-  INDEX_BSDF_DIFFUSE_REFLECTION               = 0,
-  INDEX_BSDF_SPECULAR_REFLECTION              = 1,
-  INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION = 2,
-  NUMBER_OF_BSDF_INDICES                      = 3
-};
-
-#endif // FUNCTION_INDICES_CUH
+  sysOutputBuffer[theLaunchIndex] = make_float4(sysColorBackground, 1.0f);
+}

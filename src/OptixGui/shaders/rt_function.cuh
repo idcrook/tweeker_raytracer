@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,14 +28,11 @@
 
 #pragma once
 
-#ifndef LENS_SHADER_H
-#define LENS_SHADER_H
+#ifndef RT_FUNCTION_CUH
+#define RT_FUNCTION_CUH
 
-enum LensShader
-{
-  LENS_SHADER_PINHOLE  = 0,
-  LENS_SHADER_FISHEYE  = 1,
-  LENS_SHADER_SPHERE   = 2
-};
+#ifndef RT_FUNCTION
+#define RT_FUNCTION __forceinline__ __device__
+#endif
 
-#endif // LENS_SHADER_H
+#endif // RT_FUNCTION_CUH

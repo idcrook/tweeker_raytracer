@@ -1,7 +1,7 @@
 
-#include "lib/app_config.cuh"
+#include "shaders/app_config.cuh"
 
-#include "Application.h"
+#include "include/Application.h"
 
 #include <IL/il.h>
 
@@ -10,16 +10,8 @@
 #include <stdexcept>
 #include <chrono>
 
-// // Image I/O
-// // define STB_IMAGE*_IMPLEMENTATION-s only once (e.g. in .cpp file)
-// #define STB_IMAGE_IMPLEMENTATION
-// // #define STB_IMAGE_WRITE_IMPLEMENTATION // not yet used
-// #include "../external/rtw_stb_image.h"
-
-// Executive Director
-#include "Director.h"
 // Parse command line arguments and options
-#include "InputParser.h"
+#include "include/InputParser.h"
 
 
 #define Nx_MIN  (320)
@@ -366,8 +358,12 @@ int main(int argc, char* argv[])
   ilInit(); // Initialize DevIL once.
 
   // start our Application context
+  // g_app = new Application(window, windowWidth, windowHeight,
+  //                         devices, stackSize, interop, light, miss, environment);
+
   g_app = new Application(window, windowWidth, windowHeight,
-                          devices, stackSize, interop, light, miss, environment);
+                          devices, stackSize, interop);
+
   if (!g_app->isValid())
   {
     glfw_error_callback(4, "Application initialization failed.");
@@ -390,7 +386,7 @@ int main(int argc, char* argv[])
 
       g_app->guiNewFrame();
 
-      g_app->guiReferenceManual(); // DAR HACK The ImGui "Programming Manual" as example code.
+      //g_app->guiReferenceManual(); // DAR HACK The ImGui "Programming Manual" as example code.
 
       g_app->guiWindow(); // The OptiX introduction example GUI window.
 
@@ -409,40 +405,15 @@ int main(int argc, char* argv[])
 
     else
     {
-      for (int i = 0; i < 64; ++i) // Accumulate 64 samples per pixel.
-      {
-        g_app->render();  // OptiX rendering and OpenGL texture update.
-      }
+      // for (int i = 0; i < 64; ++i) // Accumulate 64 samples per pixel.
+      // {
+      g_app->render();  // OptiX rendering and OpenGL texture update.
+      // }
       g_app->screenshot(filenameScreenshot);
 
       glfwSetWindowShouldClose(window, 1);
     }
 
-    // else
-    // {
-    //   Director optixSingleton = Director(Qverbose, Qdebug);
-
-    //   auto start = std::chrono::system_clock::now();
-    //   optixSingleton.init(Nx, Ny, Ns);
-
-    //   if (Qverbose) {
-    //     std::cerr << "INFO: Output image dimensions: " << Nx << 'x' << Ny << std::endl;
-    //     std::cerr << "INFO: Number of rays sent per pixel: " << Ns << std::endl;
-    //     std::cerr << "INFO: Scene number selected: " << Nscene << std::endl;
-    //   }
-    //   optixSingleton.createScene(Nscene);
-
-    //   optixSingleton.renderFrame();
-    //   auto stop = std::chrono::system_clock::now();
-    //   auto time_seconds = std::chrono::duration<float>(stop - start).count();
-    //   std::cerr << "INFO: Took " << time_seconds << " seconds." << std::endl;
-
-    //   optixSingleton.printPPM();
-
-    //   optixSingleton.destroy();
-
-    //   glfwSetWindowShouldClose(window, 1);
-    // }
   }
 
   // Cleanup

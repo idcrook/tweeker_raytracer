@@ -42,7 +42,8 @@
 
 // 0 == Brute force path tracing without next event estimation (direct lighting). // Debug setting to compare lighting results.
 // 1 == Next event estimation per path vertex (direct lighting) and using MIS with power heuristic. // Default.
-#define USE_NEXT_EVENT_ESTIMATION 1
+//#define USE_NEXT_EVENT_ESTIMATION 1
+#define USE_NEXT_EVENT_ESTIMATION 0
 
 // 0 == Do not compile in anything which is related to the built-in OptiX 5.1.0 DL Denoiser.
 // 1 == Compile in all code which is needed to run the DL Denoiser.
@@ -63,6 +64,7 @@
 
 // 0 == Disable all OptiX exceptions, rtPrintfs and rtAssert functionality. (Benchmark only in this mode!)
 // 1 == Enable  all OptiX exceptions, rtPrintfs and rtAssert functionality. (Really only for debugging, big performance hit!)
-#define USE_DEBUG_EXCEPTIONS 0
+//#define USE_DEBUG_EXCEPTIONS 0
+#define USE_DEBUG_EXCEPTIONS 1
 
 #endif // APP_CONFIG_CUH
