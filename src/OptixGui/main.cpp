@@ -1,7 +1,9 @@
 
-#include "lib/app_config.cuh"
+#include "shaders/app_config.cuh"
 
-#include "Application.h"
+#include "include/Application.h"
+
+#include <sutil.h>
 
 #include <IL/il.h>
 
@@ -10,16 +12,8 @@
 #include <stdexcept>
 #include <chrono>
 
-// // Image I/O
-// // define STB_IMAGE*_IMPLEMENTATION-s only once (e.g. in .cpp file)
-// #define STB_IMAGE_IMPLEMENTATION
-// // #define STB_IMAGE_WRITE_IMPLEMENTATION // not yet used
-// #include "../external/rtw_stb_image.h"
-
-// Executive Director
-#include "Director.h"
 // Parse command line arguments and options
-#include "InputParser.h"
+#include "include/InputParser.h"
 
 
 #define Nx_MIN  (320)
@@ -107,9 +101,9 @@ int main(int argc, char* argv[])
   int  devices      = 3210;  // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
   bool interop      = true;  // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
   int  stackSize    = 1024;  // Command line parameter just to be able to find the smallest working size.
-  bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
-  int  miss         = 1;     // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
-  std::string environment = std::string(""); //(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
+  //std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
+  // bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
+  // int  miss         = 1;     // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
 
   std::string filenameScreenshot;
   bool hasGUI = true;
@@ -290,6 +284,7 @@ int main(int argc, char* argv[])
 
 
 // Decide GL version (set GL Hints before glfwCreateWindow)
+// glxinfo -B
 #if __APPLE__
 // GL 3.2
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -301,8 +296,9 @@ int main(int argc, char* argv[])
 // GL 3.0
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-  // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-  // glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+  // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+  // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
 #endif
 
 // Create window with graphics context
@@ -366,8 +362,12 @@ int main(int argc, char* argv[])
   ilInit(); // Initialize DevIL once.
 
   // start our Application context
+  // g_app = new Application(window, windowWidth, windowHeight,
+  //                         devices, stackSize, interop, light, miss, environment);
+
   g_app = new Application(window, windowWidth, windowHeight,
-                          devices, stackSize, interop, light, miss, environment);
+                          devices, stackSize, interop);
+
   if (!g_app->isValid())
   {
     glfw_error_callback(4, "Application initialization failed.");
@@ -379,6 +379,7 @@ int main(int argc, char* argv[])
   // main loop
   while (!glfwWindowShouldClose(window))
   {
+    // Poll and handle events (inputs, window resize, etc.)
     glfwPollEvents(); // Render continuously.
 
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
@@ -390,7 +391,7 @@ int main(int argc, char* argv[])
 
       g_app->guiNewFrame();
 
-      g_app->guiReferenceManual(); // DAR HACK The ImGui "Programming Manual" as example code.
+      //g_app->guiReferenceManual(); // DAR HACK The ImGui "Programming Manual" as example code.
 
       g_app->guiWindow(); // The OptiX introduction example GUI window.
 
@@ -418,31 +419,6 @@ int main(int argc, char* argv[])
       glfwSetWindowShouldClose(window, 1);
     }
 
-    // else
-    // {
-    //   Director optixSingleton = Director(Qverbose, Qdebug);
-
-    //   auto start = std::chrono::system_clock::now();
-    //   optixSingleton.init(Nx, Ny, Ns);
-
-    //   if (Qverbose) {
-    //     std::cerr << "INFO: Output image dimensions: " << Nx << 'x' << Ny << std::endl;
-    //     std::cerr << "INFO: Number of rays sent per pixel: " << Ns << std::endl;
-    //     std::cerr << "INFO: Scene number selected: " << Nscene << std::endl;
-    //   }
-    //   optixSingleton.createScene(Nscene);
-
-    //   optixSingleton.renderFrame();
-    //   auto stop = std::chrono::system_clock::now();
-    //   auto time_seconds = std::chrono::duration<float>(stop - start).count();
-    //   std::cerr << "INFO: Took " << time_seconds << " seconds." << std::endl;
-
-    //   optixSingleton.printPPM();
-
-    //   optixSingleton.destroy();
-
-    //   glfwSetWindowShouldClose(window, 1);
-    // }
   }
 
   // Cleanup

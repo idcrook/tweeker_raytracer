@@ -58,4 +58,7 @@ cmake --build build --target optixGui --parallel 7
 
 build/optixGui # [options]
 
+
+OPTIX_SAMPLES_SDK_PTX_DIR=/home/dpc/projects/learning/rt/github/optix/optix_advanced_samples/build/lib/ptx build/optixGui
+
 ```

@@ -25,7 +25,7 @@
 
 // This code is part of the NVIDIA nvpro-pipeline https://github.com/nvpro-pipeline/pipeline
 
-#include "Timer.h"
+#include "include/Timer.h"
 
 #if defined(_WIN32)
 #  define GETTIME(x) QueryPerformanceCounter(x)

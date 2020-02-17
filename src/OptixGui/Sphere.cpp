@@ -26,13 +26,13 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "Application.h"
+#include "include/Application.h"
 
 #include <cstring>
 #include <iostream>
 #include <sstream>
 
-#include "MyAssert.h"
+#include "include/MyAssert.h"
 
 optix::Geometry Application::createSphere(const int tessU, const int tessV, const float radius, const float maxTheta)
 {
