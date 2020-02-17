@@ -44,7 +44,8 @@
 
 #include "include/MyAssert.h"
 
-const char* const SAMPLE_NAME = "optixIntro_01";
+//const char* const SAMPLE_NAME = "optixIntro_01";
+const char* const SAMPLE_NAME = "optixGui";
 
 static std::string ptxPath(std::string const& cuda_file)
 {
@@ -64,34 +65,18 @@ Application::Application(GLFWwindow* window,
 , m_height(height)
 , m_devicesEncoding(devices)
 , m_stackSize(stackSize)
+, m_interop(interop)
+
 {
 
-// // Decide GLSL versions
-// #if __APPLE__
-// // GLSL 150
-//   const char *glsl_version = "#version 150";
-// #else
-// // GLSL 130
-//   const char *glsl_version = "#version 130";
-// #endif
-
-
   // Setup ImGui binding.
-  // IMGUI_CHECKVERSION();
+  IMGUI_CHECKVERSION();
   ImGui::CreateContext();
-  ImGuiIO &io = ImGui::GetIO();
-  (void)io;
+  ImGuiIO &io = ImGui::GetIO();   (void)io;
 
-  // Setup Platform/Renderer bindings
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  //ImGui_ImplOpenGL3_Init(glsl_version);
-  ImGui_ImplOpenGL3_Init();
-
-  // This initializes the GLFW part including the font texture.
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplGlfw_NewFrame();
-  ImGui::NewFrame();
-  ImGui::EndFrame();
+  // // Setup Dear ImGui style
+  // ImGui::StyleColorsDark();
+  // //ImGui::StyleColorsClassic();
 
   ImGuiStyle& style = ImGui::GetStyle();
 
@@ -147,6 +132,19 @@ Application::Application(GLFWwindow* window,
   style.Colors[ImGuiCol_NavHighlight]          = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
   style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
 
+  // Setup Platform/Renderer bindings
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  //ImGui_ImplOpenGL3_Init("#version 120");
+  //ImGui_ImplOpenGL3_Init("#version 130");
+  //ImGui_ImplOpenGL3_Init("#version 300 es");
+  ImGui_ImplOpenGL3_Init();
+
+  // This initializes the GLFW part including the font texture.
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+  ImGui::EndFrame();
+
   // Renderer setup and GUI parameters.
 
   // GLSL shaders objects and program.
@@ -154,9 +152,18 @@ Application::Application(GLFWwindow* window,
   m_glslFS      = 0;
   m_glslProgram = 0;
 
+  m_guiState = GUI_STATE_NONE;
+
   m_isWindowVisible = true;
 
-  m_colorBackground = optix::make_float3(0.462745f, 0.72549f, 0.0f); // The color with which the ray generation will fill the sysOutputBuffer.
+  m_mouseSpeedRatio = 10.0f;
+
+  m_pinholeCamera.setViewport(m_width, m_height);
+
+  // m_colorBottom = optix::make_float3(0.0f);
+  // m_colorTop    = optix::make_float3(1.0f);
+  m_colorBottom = optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  m_colorTop    = optix::make_float3(0.45f, 0.55f, 0.60f);
 
   initOpenGL();
   initOptiX(); // Sets m_isValid when OptiX initialization was successful.
@@ -206,6 +213,9 @@ void Application::reshape(int width, int height)
     {
       std::cerr << e.getErrorString() << std::endl;
     }
+
+    m_pinholeCamera.setViewport(m_width, m_height);
+
   }
 }
 
@@ -303,6 +313,7 @@ void Application::getSystemInformation()
 void Application::initOpenGL()
 {
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
   //glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
 
   glViewport(0, 0, m_width, m_height);
@@ -381,6 +392,7 @@ void Application::initOptiX()
 
     initPrograms();
     initRenderer();
+    initScene();
 
     m_isValid = true; // If we get here with no exception, flag the initialization as successful. Otherwise the app will exit with error message.
   }
@@ -395,7 +407,8 @@ void Application::initRenderer()
   try
   {
     m_context->setEntryPointCount(1); // 0 = render
-    m_context->setRayTypeCount(0);    // This initial demo is not shooting any rays.
+    m_context->setRayTypeCount(1);    // 0 = radiance
+
 
     m_context->setStackSize(m_stackSize);
     std::cout << "stackSize = " << m_stackSize << std::endl;
@@ -408,18 +421,15 @@ void Application::initRenderer()
 #endif
 
     // Add context-global variables here.
-    m_context["sysColorBackground"]->setFloat(0.462745f, 0.72549f, 0.0f);
 
-    // This demo just writes into the output buffer, so use RT_BUFFER_OUTPUT as type.
     // In case of an OpenGL interop buffer, that is automatically registered with CUDA now! Must unregister/register around size changes.
-    m_bufferOutput = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_OUTPUT, m_pboOutputBuffer)
-                                 : m_context->createBuffer(RT_BUFFER_OUTPUT);
+    m_bufferOutput = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_INPUT_OUTPUT, m_pboOutputBuffer)
+                                 : m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT);
     m_bufferOutput->setFormat(RT_FORMAT_FLOAT4); // RGBA32F
     m_bufferOutput->setSize(m_width, m_height);
 
     m_context["sysOutputBuffer"]->set(m_bufferOutput);
 
-    // Set the ray generation program and the exception program.
     std::map<std::string, optix::Program>::const_iterator it = m_mapOfPrograms.find("raygeneration");
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_context->setRayGenerationProgram(0, it->second); // entrypoint
@@ -428,6 +438,18 @@ void Application::initRenderer()
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_context->setExceptionProgram(0, it->second); // entrypoint
 
+    it = m_mapOfPrograms.find("miss");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_context->setMissProgram(0, it->second); // raytype
+
+    // Default initialization. Will be overwritten on the first frame.
+    m_context["sysCameraPosition"]->setFloat(0.0f, 0.0f, 1.0f);
+    m_context["sysCameraU"]->setFloat(1.0f, 0.0f, 0.0f);
+    m_context["sysCameraV"]->setFloat(0.0f, 1.0f, 0.0f);
+    m_context["sysCameraW"]->setFloat(0.0f, 0.0f, -1.0f);
+
+    m_context["sysColorBottom"]->setFloat(m_colorBottom);
+    m_context["sysColorTop"]->setFloat(m_colorTop);
   }
   catch(optix::Exception& e)
   {
@@ -435,12 +457,44 @@ void Application::initRenderer()
   }
 }
 
+void Application::initScene()
+{
+  try
+  {
+    // Generate an empty Group node as scene root object, to be able to fill sysTopObject.
+    optix::Acceleration accRoot = m_context->createAcceleration(std::string("NoAccel"));
+
+    optix::Group groupRoot = m_context->createGroup();
+    groupRoot->setAcceleration(accRoot);
+    groupRoot->setChildCount(0); // Default.
+
+    m_context["sysTopObject"]->set(groupRoot);
+  }
+  catch(optix::Exception& e)
+  {
+    std::cerr << e.getErrorString() << std::endl;
+  }
+}
 
 bool Application::render()
 {
   bool repaint = false;
   try
   {
+    optix::float3 cameraPosition;
+    optix::float3 cameraU;
+    optix::float3 cameraV;
+    optix::float3 cameraW;
+
+    bool cameraChanged = m_pinholeCamera.getFrustum(cameraPosition, cameraU, cameraV, cameraW);
+    if (cameraChanged)
+    {
+      m_context["sysCameraPosition"]->setFloat(cameraPosition);
+      m_context["sysCameraU"]->setFloat(cameraU);
+      m_context["sysCameraV"]->setFloat(cameraV);
+      m_context["sysCameraW"]->setFloat(cameraW);
+    }
+
     m_context->launch(0, m_width, m_height);
 
     glActiveTexture(GL_TEXTURE0);
@@ -477,16 +531,13 @@ void Application::display()
   glBegin(GL_QUADS);
     glTexCoord2f(0.0f, 0.0f);
     glVertex2f(-1.0f, -1.0f);
-
     glTexCoord2f(1.0f, 0.0f);
     glVertex2f(1.0f, -1.0f);
-
     glTexCoord2f(1.0f, 1.0f);
     glVertex2f(1.0f, 1.0f);
-
     glTexCoord2f(0.0f, 1.0f);
     glVertex2f(-1.0f, 1.0f);
-    glEnd();
+  glEnd();
 
   glUseProgram(0);
 }
@@ -628,11 +679,10 @@ void Application::guiWindow()
     return;
   }
 
-  //ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
   ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);  // changed in v1.51
 
   ImGuiWindowFlags window_flags = 0;
-  if (!ImGui::Begin("optixIntro_01", nullptr, window_flags)) // No bool flag to omit the close button.
+  if (!ImGui::Begin("optixGui", nullptr, window_flags)) // No bool flag to omit the close button.
   {
     // Early out if the window is collapsed, as an optimization.
     ImGui::End();
@@ -643,9 +693,13 @@ void Application::guiWindow()
 
   if (ImGui::CollapsingHeader("System"))
   {
-    if (ImGui::ColorEdit3("Background", (float*) &m_colorBackground))
+    if (ImGui::ColorEdit3("Top Color", (float*) &m_colorTop))
     {
-      m_context["sysColorBackground"]->setFloat(m_colorBackground);
+      m_context["sysColorTop"]->setFloat(m_colorTop);
+    }
+    if (ImGui::ColorEdit3("Bottom Color", (float*) &m_colorBottom))
+    {
+      m_context["sysColorBottom"]->setFloat(m_colorBottom);
     }
   }
 
@@ -661,16 +715,93 @@ void Application::guiEventHandler()
   if (ImGui::IsKeyPressed(' ', false)) // Toggle the GUI window display with SPACE key.
   {
     m_isWindowVisible = !m_isWindowVisible;
+
+  }
+
+  // glfwSetWindowShouldClose(m_window, 1);
+
+
+  const ImVec2 mousePosition = ImGui::GetMousePos(); // Mouse coordinate window client rect.
+  const int x = int(mousePosition.x);
+  const int y = int(mousePosition.y);
+
+  switch (m_guiState)  // GUI_STATE_FOCUS is not handled
+  {
+    case GUI_STATE_NONE:
+      if (!io.WantCaptureMouse) // Only allow camera interactions to begin when not interacting with the GUI.
+      {
+        if (ImGui::IsMouseDown(0)) // LMB down event?
+        {
+          m_pinholeCamera.setBaseCoordinates(x, y);
+          m_guiState = GUI_STATE_ORBIT;
+        }
+        else if (ImGui::IsMouseDown(1)) // RMB down event?
+        {
+          m_pinholeCamera.setBaseCoordinates(x, y);
+          m_guiState = GUI_STATE_DOLLY;
+        }
+        else if (ImGui::IsMouseDown(2)) // MMB down event?
+        {
+          m_pinholeCamera.setBaseCoordinates(x, y);
+          m_guiState = GUI_STATE_PAN;
+        }
+        else if (io.MouseWheel != 0.0f) // Mouse wheel zoom.
+        {
+          m_pinholeCamera.zoom(io.MouseWheel);
+        }
+      }
+      break;
+
+    case GUI_STATE_ORBIT:
+      if (ImGui::IsMouseReleased(0)) // LMB released? End of orbit mode.
+      {
+        m_guiState = GUI_STATE_NONE;
+      }
+      else
+      {
+        m_pinholeCamera.orbit(x, y);
+      }
+      break;
+
+    case GUI_STATE_DOLLY:
+      if (ImGui::IsMouseReleased(1)) // RMB released? End of dolly mode.
+      {
+        m_guiState = GUI_STATE_NONE;
+      }
+      else
+      {
+        m_pinholeCamera.dolly(x, y);
+      }
+      break;
+
+    case GUI_STATE_PAN:
+      if (ImGui::IsMouseReleased(2)) // MMB released? End of pan mode.
+      {
+        m_guiState = GUI_STATE_NONE;
+      }
+      else
+      {
+        m_pinholeCamera.pan(x, y);
+      }
+      break;
   }
 }
+
 
 void Application::initPrograms()
 {
   try
   {
+    // First load all programs and put them into a map.
+    // Programs which are reused multiple times can be queried from that map.
+    // (This renderer does not put variables on program scope!)
+
+
     // Renderer
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
-    m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"),     "exception");     // entry point 0
+    m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception");     // entry point 0
+    m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_gradient"); // ray type 0
+
   }
   catch(optix::Exception& e)
   {

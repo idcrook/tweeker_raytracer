@@ -35,6 +35,7 @@
 #include <optixu/optixpp.h>
 // #include <optixu/optixpp_namespace.h>
 
+
 #include "imgui.h"
 
 // #define IMGUI_DEFINE_MATH_OPERATORS 1
@@ -59,6 +60,8 @@
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
 
+#include "include/PinholeCamera.h"
+
 #include <string>
 #include <map>
 
@@ -71,6 +74,14 @@
       std::cerr << "ERROR: Function " << #func << std::endl; \
   } while (0)
 
+enum GuiState
+{
+  GUI_STATE_NONE,
+  GUI_STATE_ORBIT,
+  GUI_STATE_PAN,
+  GUI_STATE_DOLLY,
+  GUI_STATE_FOCUS
+};
 
 class Application
 {
@@ -109,6 +120,7 @@ private:
   void initOptiX();
   void initRenderer();
   void initPrograms();
+  void initScene();
 
 private:
   GLFWwindow* m_window;
@@ -121,23 +133,34 @@ private:
   unsigned int m_stackSize;
   bool         m_interop;
 
-  // ImGui data
-  bool m_isWindowVisible; // Hide the GUI window completely with SPACE key.
-
   // OpenGL variables:
   GLuint m_pboOutputBuffer;
   GLuint m_hdrTexture;
+
+  // OptiX variables:
+  optix::Context m_context;
+
+  optix::Buffer m_bufferOutput;
+
+  std::map<std::string, optix::Program> m_mapOfPrograms;
+
   // GLSL shaders objects and program.
   GLuint m_glslVS;
   GLuint m_glslFS;
   GLuint m_glslProgram;
 
-  // OptiX variables:
-  optix::Context                        m_context;
-  optix::Buffer                         m_bufferOutput;
-  std::map<std::string, optix::Program> m_mapOfPrograms;
+  GuiState m_guiState;
 
-  optix::float3 m_colorBackground;
+  bool m_isWindowVisible; // Hide the GUI window completely with SPACE key.
+
+  float m_mouseSpeedRatio;
+
+  PinholeCamera m_pinholeCamera;
+
+  // Colors for the miss_gradient program:
+  optix::float3 m_colorBottom;
+  optix::float3 m_colorTop;
+
 };
 
 #endif // APPLICATION_H

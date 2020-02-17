@@ -67,36 +67,8 @@ find_package(glad CONFIG)
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
 
-#
+# image loading
 find_package(DevIL REQUIRED)
-
-
-# cuda_compile_and_embed( raygen_ptx_c   raygen/raygen.cu )
-# cuda_compile_and_embed(   miss_ptx_c     raygen/miss.cu )
-
-# cuda_compile_and_embed(  sphere_ptx_c          geometry/sphere.cu )
-# cuda_compile_and_embed( moving_sphere_ptx_c   geometry/movingSphere.cu )
-# cuda_compile_and_embed( volume_sphere_ptx_c   geometry/volumeSphere.cu )
-# cuda_compile_and_embed( aarect_ptx_c          geometry/aarect.cu )
-# cuda_compile_and_embed( volume_box_ptx_c      geometry/volumeBox.cu )
-
-# cuda_compile_and_embed( normal_material_ptx_c     material/normalMaterial.cu  )
-# cuda_compile_and_embed( lambertian_material_ptx_c material/lambertianMaterial.cu  )
-# cuda_compile_and_embed( metal_material_ptx_c      material/metalMaterial.cu  )
-# cuda_compile_and_embed( dielectric_material_ptx_c material/dielectricMaterial.cu  )
-# cuda_compile_and_embed( diffuse_light_material_ptx_c material/diffuseLight.cu  )
-# cuda_compile_and_embed( isotropic_material_ptx_c  material/isotropicMaterial.cu  )
-
-# cuda_compile_and_embed( null_texture_ptx_c        texture/nullTexture.cu  )
-# cuda_compile_and_embed( constant_texture_ptx_c    texture/constantTexture.cu  )
-# cuda_compile_and_embed( checkered_texture_ptx_c   texture/checkeredTexture.cu  )
-# cuda_compile_and_embed( noise_texture_ptx_c       texture/noiseTexture.cu  )
-# cuda_compile_and_embed( image_texture_ptx_c       texture/imageTexture.cu  )
-
-# cuda_compile_and_embed( cosine_pdf_ptx_c  pdf/cosinePdf.cu )
-# cuda_compile_and_embed( rect_pdf_ptx_c    pdf/rectPdf.cu )
-# cuda_compile_and_embed( mixture_pdf_ptx_c      pdf/mixturePdf.cu )
-# cuda_compile_and_embed( mixture_bias_pdf_ptx_c pdf/mixtureBiasPdf.cu )
 
 
 ##################################################################
@@ -172,15 +144,8 @@ function(OPTIX_add_sample_executable target_name)
     ${IL_LIBRARIES}
     ${ILU_LIBRARIES}
     ${ILUT_LIBRARIES}
-  )
-  # target_link_libraries(
-  #   sutil_sdk
-  #   optix
-  #   glfw
-  #   imgui
-  #   ${OPENGL_gl_LIBRARY}
-  #   ${optix_rpath}
-  #   )
+    )
+  # are using GLAD opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
   if(USING_GNU_CXX)
@@ -192,75 +157,27 @@ endfunction()
 # Our sutil library.  The rules to build it are found in the subdirectory.
 add_subdirectory(sutil)
 
-OPTIX_add_sample_executable( optixIntro_01
+OPTIX_add_sample_executable( optixGui
   main.cpp
-
-  bindings/imgui_impl_glfw.cpp
-  bindings/imgui_impl_opengl3.cpp
-  bindings/imgui_impl_glfw.h
-  bindings/imgui_impl_opengl3.h
-
-  include/Application.h
-  Application.cpp
 
   include/MyAssert.h
 
-  shaders/app_config.cuh
-  shaders/rt_function.cuh
-
-  shaders/raygeneration.cu
-  shaders/exception.cu
-)
-
-
-add_executable(optixGui
-  main.cpp
-
-  include/Application.h
-  Application.cpp
-
-  # Box.cpp
-  # Parallelogram.cpp
-  # Plane.cpp
-  # Sphere.cpp
-  # Torus.cpp
-
-  # Texture.h
-  # Texture.cpp
-
-  # Timer.h
-  # Timer.cpp
-
-  # PinholeCamera.h
-  # PinholeCamera.cpp
-
-  # Picture.h
-  # Picture.cpp
-
   bindings/imgui_impl_glfw.cpp
   bindings/imgui_impl_opengl3.cpp
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_opengl3.h
 
+  include/Application.h
+  Application.cpp
+
+  include/PinholeCamera.h
+  PinholeCamera.cpp
+
   shaders/app_config.cuh
   shaders/rt_function.cuh
+  shaders/per_ray_data.cuh
 
   shaders/raygeneration.cu
   shaders/exception.cu
-
-   )
-
-
-target_compile_definitions(optixGui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
-
-target_link_libraries(optixGui
-  sutil_sdk
-  OpenGL::GL
-  imgui::imgui
-  glad::glad
-  glfw::glfw
-  ${optix_LIBRARY}
-  ${IL_LIBRARIES}
-  ${ILU_LIBRARIES}
-  ${ILUT_LIBRARIES}
-  )
+  shaders/miss.cu
+)
