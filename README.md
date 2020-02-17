@@ -1,9 +1,15 @@
 tweeker_raytracer
 =================
 
-Experimental raytracing test bed. Spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer) which was based on Ray Tracing In One Weekend series by Peter Shirley.
+Experimental raytracing test bed.
 
 ![intro Optix 04 - shapes](assets/img/intro_04.png)
+
+Applications:
+
+-	[OptixGui](src/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
+
+Name is a play on `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
 
 Pre-requisites
 --------------
