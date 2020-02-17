@@ -28,35 +28,25 @@
 
 #pragma once
 
-#ifndef PER_RAY_DATA_CUH
-#define PER_RAY_DATA_CUH
+#ifndef MATERIAL_PARAMETER_CUH
+#define MATERIAL_PARAMETER_CUH
 
-#include "app_config.cuh"
+// #include "function_indices.cuh"
 
-#include "random_number_generators.cuh"
-
-// Set if (0.0f <= wo_dot_ng), means looking onto the front face. (Edge-on is explicitly handled as frontface for the material stack.)
-#define FLAG_FRONTFACE      0x00000010
-
-// Highest bit set means terminate path.
-#define FLAG_TERMINATE      0x80000000
-
-
-// Note that the fields are ordered by CUDA alignment.
-struct PerRayData
+// Just some hardcoded material parameter system which allows to show a few fundamental BSDFs.
+// Alignment of all data types used here is 4 bytes.
+struct MaterialParameter
 {
-  optix::float3 pos;            // Current surface hit point, in world space
+  // FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
+  optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
+  // int           albedoID;   // Bindless 2D texture ID used to modulate the albedo color when != RT_TEXTURE_ID_NULL.
+  // int           cutoutID;   // Bindless 2D texture ID used to calculate the cutout opacity when != RT_TEXTURE_ID_NULL.
+  // optix::float3 absorption; // Absorption coefficient
+  // float         ior;        // Index of refraction
+  // unsigned int  flags;      // Thin-walled on/off
 
-  optix::float3 wo;             // Outgoing direction, to observer, in world space.
-  optix::float3 wi;             // Incoming direction, to light, in world space.
-
-  optix::float3 radiance;       // Radiance along the current path segment.
-  int           flags;          // Bitfield with flags. See FLAG_* defines for its contents.
-
-  optix::float3 f_over_pdf;     // BSDF sample throughput, pre-multiplied f_over_pdf = bsdf.f * fabsf(dot(wi, ns) / bsdf.pdf;
-  float         pdf;            // The last BSDF sample's pdf, tracked for multiple importance sampling.
-
-  unsigned int  seed;           // Random number generator input.
+  // Manual padding to 16-byte alignment goes here.
+  float unused0;
 };
 
-#endif // PER_RAY_DATA_CUH
+#endif // MATERIAL_PARAMETER_CUH

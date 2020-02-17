@@ -175,7 +175,7 @@ float PinholeCamera::getAspectRatio() const
   return m_aspect;
 }
 
-bool PinholeCamera::getFrustum(float3& pos, float3& u, optix::float3& v, optix::float3& w)
+bool PinholeCamera::getFrustum(optix::float3& pos, optix::float3& u, optix::float3& v, optix::float3& w)
 {
   bool changed = m_changed;
   if (changed)

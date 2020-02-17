@@ -163,8 +163,10 @@ OPTIX_add_sample_executable( optixGui
   include/Application.h
   Application.cpp
 
+  Box.cpp
   Plane.cpp
   Sphere.cpp
+  Torus.cpp
 
   include/Timer.h
   Timer.cpp
@@ -173,19 +175,24 @@ OPTIX_add_sample_executable( optixGui
   PinholeCamera.cpp
 
   shaders/app_config.cuh
-  shaders/rt_function.cuh
-  shaders/per_ray_data.cuh
-  shaders/vertex_attributes.cuh
+  include/MyAssert.h
 
-  shaders/raygeneration.cu
-  shaders/closesthit.cu
-  shaders/miss.cu
-  shaders/exception.cu
+  shaders/material_parameter.cuh
+  shaders/per_ray_data.cuh
+  shaders/random_number_generators.cuh
+  shaders/rt_assert.cuh
+  shaders/rt_function.cuh
+  shaders/shader_common.cuh
+  shaders/vertex_attributes.cuh
 
   shaders/boundingbox_triangle_indexed.cu
   shaders/intersection_triangle_indexed.cu
 
-  include/MyAssert.h
+  shaders/raygeneration.cu
+  shaders/miss.cu
+  shaders/exception.cu
+
+  shaders/closesthit.cu
 
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_glfw.cpp

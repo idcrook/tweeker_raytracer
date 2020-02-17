@@ -3,6 +3,8 @@
 
 #include "include/Application.h"
 
+#include <sutil.h>
+
 #include <IL/il.h>
 
 #include <iostream>
@@ -99,9 +101,9 @@ int main(int argc, char* argv[])
   int  devices      = 3210;  // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
   bool interop      = true;  // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
   int  stackSize    = 1024;  // Command line parameter just to be able to find the smallest working size.
-  bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
-  int  miss         = 1;     // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
-  std::string environment = std::string(""); //(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
+  //std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
+  // bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
+  // int  miss         = 1;     // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
 
   std::string filenameScreenshot;
   bool hasGUI = true;
@@ -408,10 +410,10 @@ int main(int argc, char* argv[])
 
     else
     {
-      // for (int i = 0; i < 64; ++i) // Accumulate 64 samples per pixel.
-      // {
-      g_app->render();  // OptiX rendering and OpenGL texture update.
-      // }
+      for (int i = 0; i < 64; ++i) // Accumulate 64 samples per pixel.
+      {
+        g_app->render();  // OptiX rendering and OpenGL texture update.
+      }
       g_app->screenshot(filenameScreenshot);
 
       glfwSetWindowShouldClose(window, 1);

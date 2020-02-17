@@ -59,6 +59,7 @@
 #include "include/Timer.h"
 
 #include "shaders/vertex_attributes.cuh"
+#include "shaders/material_parameter.cuh"
 
 #include <string>
 #include <map>
@@ -80,6 +81,16 @@ enum GuiState
   GUI_STATE_DOLLY,
   GUI_STATE_FOCUS
 };
+
+
+// Host side GUI material parameters.
+// (The separation between host side GUI parameters and the MaterialParameters struct on device side
+//  will become clearer in later examples, where GUI parameters are not just copied´to the buffer.)
+struct MaterialParameterGUI
+{
+  optix::float3 albedo; // albedo, color, tint, throughput change for specular materials.
+};
+
 
 class Application
 {
@@ -123,12 +134,18 @@ private:
 
   void createScene();
 
+  optix::Geometry createBox();
   optix::Geometry createPlane(const int tessU, const int tessV, const int upAxis);
   optix::Geometry createSphere(const int tessU, const int tessV, const float radius, const float maxTheta);
+  optix::Geometry createTorus(const int tessU, const int tessV, const float innerRadius, const float outerRadius);
 
   optix::Geometry createGeometry(std::vector<VertexAttributes> const& attributes, std::vector<unsigned int> const& indices);
 
   void setAccelerationProperties(optix::Acceleration acceleration);
+
+  void updateMaterialParameters();
+
+  void restartAccumulation();
 
 
 private:
@@ -141,6 +158,13 @@ private:
   unsigned int m_devicesEncoding;
   unsigned int m_stackSize;
   bool         m_interop;
+
+  // Application GUI parameters.
+  int   m_minPathLength;       // Minimum path length after which Russian Roulette path termination starts.
+  int   m_maxPathLength;       // Maximum path length.
+  float m_sceneEpsilonFactor;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
+
+  int   m_iterationIndex;
 
   std::string m_builder;
 
@@ -155,10 +179,31 @@ private:
 
   std::map<std::string, optix::Program> m_mapOfPrograms;
 
+  // The material parameters exposed inside the GUI are slightly different than the resulting values for the device.
+  // The GUI exposes an absorption color and a distance scale, and the thin-walled property as bool.
+  // These are converted on the fly into the device side sysMaterialParameters buffer.
+  std::vector<MaterialParameterGUI> m_guiMaterialParameters;
+  optix::Buffer                     m_bufferMaterialParameters; // Array of MaterialParameters.
+
+  bool   m_present; // This controls if the texture image is updated per launch or only once a second.
+  bool   m_presentNext;
+  double m_presentAtSecond;
+
+  int m_frames;
+
   // GLSL shaders objects and program.
   GLuint m_glslVS;
   GLuint m_glslFS;
   GLuint m_glslProgram;
+
+  // Tonemapper group:
+  float         m_gamma;
+  optix::float3 m_colorBalance;
+  float         m_whitePoint;
+  float         m_burnHighlights;
+  float         m_crushBlacks;
+  float         m_saturation;
+  float         m_brightness;
 
   GuiState m_guiState;
 

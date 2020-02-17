@@ -28,35 +28,53 @@
 
 #pragma once
 
-#ifndef PER_RAY_DATA_CUH
-#define PER_RAY_DATA_CUH
+#ifndef RANDOM_NUMBER_GENERATORS_CUH
+#define RANDOM_NUMBER_GENERATORS_CUH
 
 #include "app_config.cuh"
 
-#include "random_number_generators.cuh"
+#include "rt_function.cuh"
 
-// Set if (0.0f <= wo_dot_ng), means looking onto the front face. (Edge-on is explicitly handled as frontface for the material stack.)
-#define FLAG_FRONTFACE      0x00000010
-
-// Highest bit set means terminate path.
-#define FLAG_TERMINATE      0x80000000
-
-
-// Note that the fields are ordered by CUDA alignment.
-struct PerRayData
+// Tiny Encryption Algorithm (TEA) to calculate a the seed per launch index and iteration.
+template<unsigned int N>
+RT_FUNCTION unsigned int tea(const unsigned int val0, const unsigned int val1)
 {
-  optix::float3 pos;            // Current surface hit point, in world space
+  unsigned int v0 = val0;
+  unsigned int v1 = val1;
+  unsigned int s0 = 0;
 
-  optix::float3 wo;             // Outgoing direction, to observer, in world space.
-  optix::float3 wi;             // Incoming direction, to light, in world space.
+  for (unsigned int n = 0; n < N; ++n)
+  {
+    s0 += 0x9e3779b9;
+    v0 += ((v1 << 4) + 0xA341316C) ^ (v1 + s0) ^ ((v1 >> 5) + 0xC8013EA4);
+    v1 += ((v0 << 4) + 0xAD90777D) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7E95761E);
+  }
+  return v0;
+}
 
-  optix::float3 radiance;       // Radiance along the current path segment.
-  int           flags;          // Bitfield with flags. See FLAG_* defines for its contents.
+// Return a random sample in the range [0, 1) with a simple Linear Congruential Generator.
+RT_FUNCTION float rng(unsigned int& previous)
+{
+  previous = previous * 1664525u + 1013904223u;
 
-  optix::float3 f_over_pdf;     // BSDF sample throughput, pre-multiplied f_over_pdf = bsdf.f * fabsf(dot(wi, ns) / bsdf.pdf;
-  float         pdf;            // The last BSDF sample's pdf, tracked for multiple importance sampling.
+  return float(previous & 0X00FFFFFF) / float(0x01000000u); // Use the lower 24 bits.
+  // return float(previous >> 8) / float(0x01000000u);      // Use the upper 24 bits
+}
 
-  unsigned int  seed;           // Random number generator input.
-};
+// Convenience function to generate a 2D unit square sample.
+RT_FUNCTION float2 rng2(unsigned int& previous)
+{
+  float2 s;
 
-#endif // PER_RAY_DATA_CUH
+  previous = previous * 1664525u + 1013904223u;
+  s.x = float(previous & 0X00FFFFFF) / float(0x01000000u); // Use the lower 24 bits.
+  //s.x = float(previous >> 8) / float(0x01000000u);      // Use the upper 24 bits
+
+  previous = previous * 1664525u + 1013904223u;
+  s.y = float(previous & 0X00FFFFFF) / float(0x01000000u); // Use the lower 24 bits.
+  //s.y = float(previous >> 8) / float(0x01000000u);      // Use the upper 24 bits
+
+  return s;
+}
+
+#endif // RANDOM_NUMBER_GENERATORS_CUH

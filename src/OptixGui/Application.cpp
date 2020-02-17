@@ -40,12 +40,13 @@
 #include <iostream>
 #include <sstream>
 
+#include "shaders/material_parameter.cuh"
+
 // DAR Only for sutil::samplesPTXDir() and sutil::writeBufferToFile()
 #include <sutil.h>
 
 #include "include/MyAssert.h"
 
-//const char* const SAMPLE_NAME = "optixIntro_01";
 const char* const SAMPLE_NAME = "optixGui";
 
 static std::string ptxPath(std::string const& cuda_file)
@@ -150,12 +151,41 @@ Application::Application(GLFWwindow* window,
   ImGui::EndFrame();
 
   // Renderer setup and GUI parameters.
+  m_minPathLength       = 2;    // Minimum path length after which Russian Roulette path termination starts.
+  m_maxPathLength       = 2;    // Maximum path length. (Need at least 6 path segments to go through a glass sphere, hit something, and back through that sphere to the viewer.)
+  m_sceneEpsilonFactor  = 500;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
+
+  m_present         = false;  // Update once per second. (The first half second shows all frames to get some initial accumulation).
+  m_presentNext     = true;
+  m_presentAtSecond = 1.0;
+
   m_builder = std::string("Trbvh");
+
+  m_frames = 0; // Samples per pixel. 0 == render forever.
 
   // GLSL shaders objects and program.
   m_glslVS      = 0;
   m_glslFS      = 0;
   m_glslProgram = 0;
+
+  // Settings normally used.
+  //m_gamma          = 2.2f;
+  //m_colorBalance   = optix::make_float3(1.0f);
+  //m_whitePoint     = 1.0f;
+  //m_burnHighlights = 0.8f;
+  //m_crushBlacks    = 0.2f;
+  //m_saturation     = 1.2f;
+  //m_brightness     = 0.8f;
+
+  // Neutral tonemapper settings.
+  // This sample begins with an Ambient Occlusion like rendering setup. Make sure the the image stays white.
+  m_gamma          = 2.2f; // Neutral would be 1.0f.
+  m_colorBalance   = optix::make_float3(1.0f);
+  m_whitePoint     = 1.0f;
+  m_burnHighlights = 1.0f;
+  m_crushBlacks    = 0.0f;
+  m_saturation     = 1.0f;
+  m_brightness     = 1.0f;
 
   m_guiState = GUI_STATE_NONE;
 
@@ -201,6 +231,7 @@ void Application::reshape(int width, int height)
     {
       m_bufferOutput->setSize(m_width, m_height); // RGBA32F buffer.
 
+      // When not using the denoiser this is the buffer which is displayed.
       if (m_interop)
       {
         m_bufferOutput->unregisterGLBuffer(); // Must unregister or CUDA won't notice the size change and crash.
@@ -217,6 +248,7 @@ void Application::reshape(int width, int height)
 
     m_pinholeCamera.setViewport(m_width, m_height);
 
+    restartAccumulation();
   }
 }
 
@@ -321,7 +353,7 @@ void Application::getSystemInformation()
 void Application::initOpenGL()
 {
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
+  //glClear(GL_COLOR_BUFFER_BIT);
   //glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
 
   glViewport(0, 0, m_width, m_height);
@@ -414,7 +446,7 @@ void Application::initRenderer()
 {
   try
   {
-    m_context->setEntryPointCount(1); // 0 = render
+    m_context->setEntryPointCount(1);  // 0 = render // Tonemapper is a GLSL shader in this case.
     m_context->setRayTypeCount(1);    // 0 = radiance
 
 
@@ -429,6 +461,9 @@ void Application::initRenderer()
 #endif
 
     // Add context-global variables here.
+    m_context["sysSceneEpsilon"]->setFloat(m_sceneEpsilonFactor * 1e-7f);
+    m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
+    m_context["sysIterationIndex"]->setInt(0); // With manual accumulation, 0 fills the buffer, accumulation starts at 1. On the VCA this variable is unused!
 
     // RT_BUFFER_INPUT_OUTPUT to support accumulation.
     // In case of an OpenGL interop buffer, that is automatically registered with CUDA now! Must unregister/register around size changes.
@@ -496,6 +531,16 @@ void Application::initScene()
   }
 }
 
+void Application::restartAccumulation()
+{
+  m_iterationIndex  = 0;
+  m_presentNext     = true;
+  m_presentAtSecond = 1.0;
+
+  m_timer.restart();
+}
+
+
 bool Application::render()
 {
   bool repaint = false;
@@ -513,26 +558,68 @@ bool Application::render()
       m_context["sysCameraU"]->setFloat(cameraU);
       m_context["sysCameraV"]->setFloat(cameraV);
       m_context["sysCameraW"]->setFloat(cameraW);
+
+      restartAccumulation();
     }
 
-    m_context->launch(0, m_width, m_height);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_hdrTexture);
-    if (m_interop)
+    // Continue manual accumulation rendering if there is no limit (m_frames == 0) or the number of frames has not been reached.
+    if (0 == m_frames || m_iterationIndex < m_frames)
     {
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_bufferOutput->getGLBOId());
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, (void*) 0); // RGBA32F from byte offset 0 in the pixel unpack buffer.
-      glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      m_context["sysIterationIndex"]->setInt(m_iterationIndex); // Iteration index is zero-based!
+      m_context->launch(0, m_width, m_height);
+      m_iterationIndex++;
+    }
+
+    // Only update the texture when a restart happened or one second passed to reduce required bandwidth.
+    if (m_presentNext)
+    {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, m_hdrTexture); // Manual accumulation always renders into the m_hdrTexture.
+
+      if (m_interop)
+      {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_bufferOutput->getGLBOId());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, (void*) 0); // RGBA32F from byte offset 0 in the pixel unpack buffer.
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      }
+      else
+      {
+        const void* data = m_bufferOutput->map(0, RT_BUFFER_MAP_READ);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
+        m_bufferOutput->unmap();
+      }
+
+      repaint = true; // Indicate that there is a new image.
+
+      m_presentNext = m_present;
+    }
+
+    double seconds = m_timer.getTime();
+#if 1
+    // Show the accumulation of the first half second to remain interactive with "present 0" on the VCA.
+    // Not done when benchmarking to get more accurate results.
+    if (seconds < 0.5)
+    {
+      m_presentAtSecond = 1.0;
+      m_presentNext     = true;
     }
     else
+#endif
+    if (m_presentAtSecond < seconds)
     {
-      const void* data = m_bufferOutput->map(0, RT_BUFFER_MAP_READ);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
-      m_bufferOutput->unmap();
+      m_presentAtSecond = ceil(seconds);
+
+      const double fps = double(m_iterationIndex) / seconds;
+
+      std::ostringstream stream;
+      stream.precision(3); // Precision is # digits in fraction part.
+      // m_iterationIndex has already been incremented for the last rendered frame, so it is the actual framecount here.
+      stream << std::fixed << m_iterationIndex << " / " << seconds << " = " << fps << " fps";
+      std::cout << stream.str() << std::endl;
+
+      m_presentNext = true; // Present at least every second.
     }
 
-    repaint = true; // Indicate that there is a new image.
   }
   catch(optix::Exception& e)
   {
@@ -544,8 +631,6 @@ bool Application::render()
 void Application::display()
 {
   glActiveTexture(GL_TEXTURE0);
-  glColor4f(1.0, 1.0, 1.0, 1.0)  ;
-  glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, m_hdrTexture);
 
   glUseProgram(m_glslProgram);
@@ -610,7 +695,6 @@ void Application::checkInfoLog(const char *msg, GLuint object)
 }
 
 
-// DAR This doesn't implement a tonemapper, yet, just a shader to display the HDR texture.
 void Application::initGLSL()
 {
   static const std::string vsSource =
@@ -627,11 +711,28 @@ void Application::initGLSL()
   static const std::string fsSource =
     "#version 330\n"
     "uniform sampler2D samplerHDR;\n"
+    "uniform vec3  colorBalance;\n"
+    "uniform float invWhitePoint;\n"
+    "uniform float burnHighlights;\n"
+    "uniform float saturation;\n"
+    "uniform float crushBlacks;\n"
+    "uniform float invGamma;\n"
     "in vec2 varTexCoord0;\n"
     "layout(location = 0, index = 0) out vec4 outColor;\n"
     "void main()\n"
     "{\n"
-    "  outColor = texture(samplerHDR, varTexCoord0);\n"
+    "  vec3 hdrColor = texture(samplerHDR, varTexCoord0).rgb;\n"
+    "  vec3 ldrColor = invWhitePoint * colorBalance * hdrColor;\n"
+    "  ldrColor *= (ldrColor * burnHighlights + 1.0) / (ldrColor + 1.0);\n"
+    "  float luminance = dot(ldrColor, vec3(0.3, 0.59, 0.11));\n"
+    "  ldrColor = max(mix(vec3(luminance), ldrColor, saturation), 0.0);\n"
+    "  luminance = dot(ldrColor, vec3(0.3, 0.59, 0.11));\n"
+    "  if (luminance < 1.0)\n"
+    "  {\n"
+    "    ldrColor = max(mix(pow(ldrColor, vec3(crushBlacks)), ldrColor, sqrt(luminance)), 0.0);\n"
+    "  }\n"
+    "  ldrColor = pow(ldrColor, vec3(invGamma));\n"
+    "  outColor = vec4(ldrColor, 1.0);\n"
     "}\n";
 
   GLint vsCompiled = 0;
@@ -687,7 +788,13 @@ void Application::initGLSL()
     {
       glUseProgram(m_glslProgram);
 
-      glUniform1i(glGetUniformLocation(m_glslProgram, "samplerHDR"), 0); // texture image unit 0
+      glUniform1i(glGetUniformLocation(m_glslProgram, "samplerHDR"), 0);       // texture image unit 0
+      glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
+      glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"), m_crushBlacks + m_crushBlacks + 1.0f);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
 
       glUseProgram(0);
     }
@@ -715,11 +822,108 @@ void Application::guiWindow()
 
   if (ImGui::CollapsingHeader("System"))
   {
+    if (ImGui::Checkbox("Present", &m_present))
+    {
+      // No action needed, happens automatically.
+    }
+    if (ImGui::DragInt("Min Paths", &m_minPathLength, 1.0f, 0, 100))
+    {
+      m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
+      restartAccumulation();
+    }
+    if (ImGui::DragInt("Max Paths", &m_maxPathLength, 1.0f, 0, 100))
+    {
+      m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
+      restartAccumulation();
+    }
+    if (ImGui::DragFloat("Scene Epsilon", &m_sceneEpsilonFactor, 1.0f, 0.0f, 10000.0f))
+    {
+      m_context["sysSceneEpsilon"]->setFloat(m_sceneEpsilonFactor * 1e-7f);
+      restartAccumulation();
+    }
+    if (ImGui::DragInt("Frames", &m_frames, 1.0f, 0, 10000))
+    {
+      if (m_frames != 0 && m_frames < m_iterationIndex) // If we already rendered more frames, start again.
+      {
+        restartAccumulation();
+      }
+    }
     if (ImGui::DragFloat("Mouse Ratio", &m_mouseSpeedRatio, 0.1f, 0.1f, 100.0f, "%.1f"))
     {
       m_pinholeCamera.setSpeedRatio(m_mouseSpeedRatio);
     }
   }
+  if (ImGui::CollapsingHeader("Tonemapper"))
+  {
+    if (ImGui::ColorEdit3("Balance", (float*) &m_colorBalance))
+    {
+      glUseProgram(m_glslProgram);
+      glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.01f, 10.0f)) // Must not get 0.0f
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("White Point", &m_whitePoint, 0.01f, 0.01f, 255.0f, "%.2f", 2.0f)) // Must not get 0.0f
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("Burn Lights", &m_burnHighlights, 0.01f, 0.0f, 10.0f, "%.2f"))
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("Crush Blacks", &m_crushBlacks, 0.01f, 0.0f, 1.0f, "%.2f"))
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"),  m_crushBlacks + m_crushBlacks + 1.0f);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("Saturation", &m_saturation, 0.01f, 0.0f, 10.0f, "%.2f"))
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
+      glUseProgram(0);
+    }
+    if (ImGui::DragFloat("Brightness", &m_brightness, 0.01f, 0.0f, 100.0f, "%.2f", 2.0f))
+    {
+      glUseProgram(m_glslProgram);
+      glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
+      glUseProgram(0);
+    }
+  }
+  if (ImGui::CollapsingHeader("Materials"))
+  {
+    bool changed = false;
+
+    for (int i = 0; i < int(m_guiMaterialParameters.size()); ++i)
+    {
+      if (ImGui::TreeNode((void*)(intptr_t) i, "Material %d", i))
+      {
+        MaterialParameterGUI& parameters = m_guiMaterialParameters[i];
+
+        if (ImGui::ColorEdit3("Albedo", (float*) &parameters.albedo))
+        {
+          changed = true;
+        }
+        ImGui::TreePop();
+      }
+    }
+
+    if (changed) // If any of the material parameters changed, simply upload them to the sysMaterialParameters again.
+    {
+      updateMaterialParameters();
+      restartAccumulation();
+    }
+  }
+
+
   ImGui::PopItemWidth();
 
   ImGui::End();
@@ -861,15 +1065,15 @@ void Application::initPrograms()
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
     m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception"); // entry point 0
 
-    // Constant white environment.
     m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_constant"); // raytype 0
 
     // Geometry
     m_mapOfPrograms["boundingbox_triangle_indexed"]  = m_context->createProgramFromPTXFile(ptxPath("boundingbox_triangle_indexed.cu"),  "boundingbox_triangle_indexed");
     m_mapOfPrograms["intersection_triangle_indexed"] = m_context->createProgramFromPTXFile(ptxPath("intersection_triangle_indexed.cu"), "intersection_triangle_indexed");
 
-    // Material programs.
-    // For the radiance ray type 0:
+    // Material programs. There are only three Material nodes, opaque, cutout
+    // opacity and rectangle lights.
+    // For the radiance ray type 0
     m_mapOfPrograms["closesthit"] = m_context->createProgramFromPTXFile(ptxPath("closesthit.cu"), "closesthit");
   }
   catch(optix::Exception& e)
@@ -878,20 +1082,61 @@ void Application::initPrograms()
   }
 }
 
+void Application::updateMaterialParameters()
+{
+  MY_ASSERT((sizeof(MaterialParameter) & 15) == 0); // Verify float4 alignment.
+
+  // Convert the GUI material parameters to the device side structure and upload them into the context global buffer.
+  // (Doing this in a loop will make more sense in later examples.)
+  MaterialParameter* dst = static_cast<MaterialParameter*>(m_bufferMaterialParameters->map(0, RT_BUFFER_MAP_WRITE_DISCARD));
+
+  for (size_t i = 0; i < m_guiMaterialParameters.size(); ++i, ++dst)
+  {
+    MaterialParameterGUI& src = m_guiMaterialParameters[i];
+
+    dst->albedo = src.albedo;
+  }
+
+  m_bufferMaterialParameters->unmap();
+}
+
 void Application::initMaterials()
 {
+  // Setup GUI material parameters, one for each of the objects in the scene.
+  MaterialParameterGUI parameters;
+
+  // Make all parameters white to show automatic ambient occlusion with a brute force full global illumination path tracer.
+  parameters.albedo = optix::make_float3(1.0f);
+  m_guiMaterialParameters.push_back(parameters); // 0, floor
+
+  parameters.albedo = optix::make_float3(1.0f);
+  m_guiMaterialParameters.push_back(parameters); // 1, box
+
+  parameters.albedo = optix::make_float3(1.0f);
+  m_guiMaterialParameters.push_back(parameters); // 2, sphere
+
+  parameters.albedo = optix::make_float3(1.0f);
+  m_guiMaterialParameters.push_back(parameters); // 3, torus
+
   try
   {
-    // Create the main Material node
+    m_bufferMaterialParameters = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_USER);
+    m_bufferMaterialParameters->setElementSize(sizeof(MaterialParameter));
+    m_bufferMaterialParameters->setSize(m_guiMaterialParameters.size()); // As many as there are in the GUI.
+
+    updateMaterialParameters();
+
+    m_context["sysMaterialParameters"]->setBuffer(m_bufferMaterialParameters);
+
+    // Create the main Material node to have the matching closest hit and any hit programs.
 
     std::map<std::string, optix::Program>::const_iterator it;
 
-    // Used for all materials without cutout opacity. (Faster than using the cutout opacity material for everything.)
+    // Used for all objects in the scene.
     m_opaqueMaterial = m_context->createMaterial();
     it = m_mapOfPrograms.find("closesthit");
     MY_ASSERT(it != m_mapOfPrograms.end());
-    m_opaqueMaterial->setClosestHitProgram(0, it->second); // raytype 0 == radiance
-    // No anyhit program needed for this Material and ray type.
+    m_opaqueMaterial->setClosestHitProgram(0, it->second); // raytype radiance
   }
   catch(optix::Exception& e)
   {
@@ -921,30 +1166,29 @@ void Application::createScene()
     // Mind that these local OptiX objects will leak when not cleaning up the scene properly on changes.
     // Destroying the OptiX context will clean them up at program exit though.
 
-    // Add a ground plane on the xz-plane at y = 0.0f with a 1x1 tesselation (2 triangles).
+    // Add a ground plane on the xz-plane at y = 0.0f.
     optix::Geometry geoPlane = createPlane(1, 1, 1);
 
     optix::GeometryInstance giPlane = m_context->createGeometryInstance(); // This connects Geometries with Materials.
     giPlane->setGeometry(geoPlane);
     giPlane->setMaterialCount(1);
     giPlane->setMaterial(0, m_opaqueMaterial);
+    giPlane["parMaterialIndex"]->setInt(0); // This is all! This defines which material parameters in sysMaterialParametrers to use.
 
     optix::Acceleration accPlane = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accPlane);
 
-    // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
-    optix::GeometryGroup ggPlane = m_context->createGeometryGroup();
+    optix::GeometryGroup ggPlane = m_context->createGeometryGroup(); // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
     ggPlane->setAcceleration(accPlane);
     ggPlane->setChildCount(1);
     ggPlane->setChild(0, giPlane);
 
-    // The original object coordinates of the plane have unit size, from -1.0f to 1.0f in x-axis and z-axis.
-    // Scale the plane to go from -5 to 5.
+    // Scale the plane to go from -8 to 8.
     float trafoPlane[16] =
     {
-      5.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 5.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, 5.0f, 0.0f,
+      8.0f, 0.0f, 0.0f, 0.0f,
+      0.0f, 8.0f, 0.0f, 0.0f,
+      0.0f, 0.0f, 8.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f
     };
     optix::Matrix4x4 matrixPlane(trafoPlane);
@@ -953,33 +1197,65 @@ void Application::createScene()
     trPlane->setChild(ggPlane);
     trPlane->setMatrix(false, matrixPlane.getData(), matrixPlane.inverse().getData());
 
-    // Add the transform node placeing the plane to the scene's root Group node.
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);
     m_rootGroup->setChild(count, trPlane);
 
-    // Add a tessellated sphere with 180 longitudes and 90 latitudes (32400 triangles) with radius 1.0f around the origin.
-    // The last argument is the maximum theta angle, which allows to generate spheres with a whole at the top.
-    // (Useful to test thin-walled materials with different materials on the front- and backface.)
+    // Add a box (no tessellation here, using just 12 triangles)
+    optix::Geometry geoBox = createBox();
+
+    optix::GeometryInstance giBox = m_context->createGeometryInstance();
+    giBox->setGeometry(geoBox);
+    giBox->setMaterialCount(1);
+    giBox->setMaterial(0, m_opaqueMaterial);
+    giBox["parMaterialIndex"]->setInt(1); // Using parameters in sysMaterialParameters[1].
+
+    optix::Acceleration accBox = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accBox);
+
+    optix::GeometryGroup ggBox = m_context->createGeometryGroup();
+    ggBox->setAcceleration(accBox);
+    ggBox->setChildCount(1);
+    ggBox->setChild(0, giBox);
+
+    float trafoBox[16] =
+    {
+      1.0f, 0.0f, 0.0f, -2.5f, // Move to the left.
+      0.0f, 1.0f, 0.0f, 1.25f, // The box is modeled with unit coordinates in the range [-1, 1], Move it above the floor plane.
+      0.0f, 0.0f, 1.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+    optix::Matrix4x4 matrixBox(trafoBox);
+
+    optix::Transform trBox = m_context->createTransform();
+    trBox->setChild(ggBox);
+    trBox->setMatrix(false, matrixBox.getData(), matrixBox.inverse().getData());
+
+    count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, trBox);
+
+    // Add a tessellated sphere with 180 longitudes and 90 latitudes, radius 1.0f and fully closed at the upper pole.
     optix::Geometry geoSphere = createSphere(180, 90, 1.0f, M_PIf);
+
+    optix::GeometryInstance giSphere = m_context->createGeometryInstance();
+    giSphere->setGeometry(geoSphere);
+    giSphere->setMaterialCount(1);
+    giSphere->setMaterial(0, m_opaqueMaterial);
+    giSphere["parMaterialIndex"]->setInt(2); // Using parameters in sysMaterialParameters[2].
 
     optix::Acceleration accSphere = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accSphere);
 
-    optix::GeometryInstance giSphere = m_context->createGeometryInstance(); // This connects Geometries with Materials.
-    giSphere->setGeometry(geoSphere);
-    giSphere->setMaterialCount(1);
-    giSphere->setMaterial(0, m_opaqueMaterial);
-
-    optix::GeometryGroup ggSphere = m_context->createGeometryGroup();    // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
+    optix::GeometryGroup ggSphere = m_context->createGeometryGroup();
     ggSphere->setAcceleration(accSphere);
     ggSphere->setChildCount(1);
     ggSphere->setChild(0, giSphere);
 
     float trafoSphere[16] =
     {
-      1.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 1.0f, // Translate the sphere by 1.0f on the y-axis to be above the plane, exactly touching.
+      1.0f, 0.0f, 0.0f, 0.0f,  // In the center, to the right of the box.
+      0.0f, 1.0f, 0.0f, 1.25f, // The sphere is modeled with radius 1.0f. Move it above the floor plane to show shadows.
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f
     };
@@ -992,6 +1268,40 @@ void Application::createScene()
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);
     m_rootGroup->setChild(count, trSphere);
+
+    // Add a torus.
+    optix::Geometry geoTorus = createTorus(180, 180, 0.75f, 0.25f);
+
+    optix::GeometryInstance giTorus = m_context->createGeometryInstance();
+    giTorus->setGeometry(geoTorus);
+    giTorus->setMaterialCount(1);
+    giTorus->setMaterial(0, m_opaqueMaterial);
+    giTorus["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[3].
+
+    optix::Acceleration accTorus = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accTorus);
+
+    optix::GeometryGroup ggTorus = m_context->createGeometryGroup();
+    ggTorus->setAcceleration(accTorus);
+    ggTorus->setChildCount(1);
+    ggTorus->setChild(0, giTorus);
+
+    float trafoTorus[16] =
+    {
+      1.0f, 0.0f, 0.0f, 2.5f,  // Move it to the right of the sphere.
+      0.0f, 1.0f, 0.0f, 1.25f, // The torus has an outer radius of 0.5f. Move it above the floor plane.
+      0.0f, 0.0f, 1.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+    optix::Matrix4x4 matrixTorus(trafoTorus);
+
+    optix::Transform trTorus = m_context->createTransform();
+    trTorus->setChild(ggTorus);
+    trTorus->setMatrix(false, matrixTorus.getData(), matrixTorus.inverse().getData());
+
+    count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, trTorus);
   }
   catch(optix::Exception& e)
   {
