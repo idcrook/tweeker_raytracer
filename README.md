@@ -8,8 +8,9 @@ Experimental raytracing test bed. Spun out of [weeker_raytracer](https://github.
 Pre-requisites
 --------------
 
--	Uses CMake
--	Uses [conan](https://conan.io/) for C++ package management (Experimental)
+-	Uses CMake to build.
+-	Uses [conan](https://conan.io/) for some C++ library package management
+-	Requires CUDA SDK and tools and Optix SDK to be installed locally. Refer to `notes` directory, including [optix install](notes/optix/install.md)
 
 Tested on Ubuntu Linux 19.10.
 
