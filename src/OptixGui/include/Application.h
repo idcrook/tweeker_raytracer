@@ -38,13 +38,8 @@
 
 #include "imgui.h"
 
-// #define IMGUI_DEFINE_MATH_OPERATORS 1
-// #include <imgui/imgui_internal.h>
-
-// #include <imgui/imgui_impl_glfw_gl2.h>
-
-
 #include "bindings/imgui_impl_glfw.h"
+// #include "bindings/imgui_impl_opengl2.h"
 #include "bindings/imgui_impl_opengl3.h"
 
 #if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)

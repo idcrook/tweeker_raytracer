@@ -133,12 +133,15 @@ Application::Application(GLFWwindow* window,
   style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
 
   // Setup Platform/Renderer bindings
+  // ImGui_ImplGlfw_InitForOpenGL(window, true);
+  // ImGui_ImplOpenGL2_Init();
+
+  // OpenGL 3
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   //ImGui_ImplOpenGL3_Init("#version 120");
   //ImGui_ImplOpenGL3_Init("#version 130");
   //ImGui_ImplOpenGL3_Init("#version 300 es");
   ImGui_ImplOpenGL3_Init();
-
   // This initializes the GLFW part including the font texture.
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
@@ -177,6 +180,7 @@ Application::~Application()
     m_context->destroy();
   }
 
+  // ImGui_ImplOpenGL2_Shutdown();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -221,6 +225,12 @@ void Application::reshape(int width, int height)
 
 void Application::guiNewFrame()
 {
+  // // opengl2
+  // ImGui_ImplOpenGL2_NewFrame();
+  // ImGui_ImplGlfw_NewFrame();
+  // ImGui::NewFrame();
+
+  // opengl 3
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
@@ -236,6 +246,7 @@ void Application::guiReferenceManual()
 void Application::guiRender()
 {
   ImGui::Render();
+  //ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 }
@@ -524,6 +535,8 @@ bool Application::render()
 void Application::display()
 {
   glActiveTexture(GL_TEXTURE0);
+  glColor4f(1.0, 1.0, 1.0, 1.0)  ;
+  glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, m_hdrTexture);
 
   glUseProgram(m_glslProgram);
@@ -718,7 +731,10 @@ void Application::guiEventHandler()
 
   }
 
-  // glfwSetWindowShouldClose(m_window, 1);
+  // if (ImGui::IsKeyPressed('q', false)) // DOES NOT WORK - Quit app with 'q' key
+  // {
+  //   glfwSetWindowShouldClose(m_window, 1);
+  // }
 
 
   const ImVec2 mousePosition = ImGui::GetMousePos(); // Mouse coordinate window client rect.

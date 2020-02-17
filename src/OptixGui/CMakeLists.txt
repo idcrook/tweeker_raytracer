@@ -162,10 +162,12 @@ OPTIX_add_sample_executable( optixGui
 
   include/MyAssert.h
 
-  bindings/imgui_impl_glfw.cpp
-  bindings/imgui_impl_opengl3.cpp
   bindings/imgui_impl_glfw.h
+  bindings/imgui_impl_glfw.cpp
+  # bindings/imgui_impl_opengl2.h
+  # bindings/imgui_impl_opengl2.cpp
   bindings/imgui_impl_opengl3.h
+  bindings/imgui_impl_opengl3.cpp
 
   include/Application.h
   Application.cpp
