@@ -56,6 +56,9 @@
 #include <GLFW/glfw3.h>
 
 #include "include/PinholeCamera.h"
+#include "include/Timer.h"
+
+#include "shaders/vertex_attributes.cuh"
 
 #include <string>
 #include <map>
@@ -115,7 +118,18 @@ private:
   void initOptiX();
   void initRenderer();
   void initPrograms();
+  void initMaterials();
   void initScene();
+
+  void createScene();
+
+  optix::Geometry createPlane(const int tessU, const int tessV, const int upAxis);
+  optix::Geometry createSphere(const int tessU, const int tessV, const float radius, const float maxTheta);
+
+  optix::Geometry createGeometry(std::vector<VertexAttributes> const& attributes, std::vector<unsigned int> const& indices);
+
+  void setAccelerationProperties(optix::Acceleration acceleration);
+
 
 private:
   GLFWwindow* m_window;
@@ -127,6 +141,8 @@ private:
   unsigned int m_devicesEncoding;
   unsigned int m_stackSize;
   bool         m_interop;
+
+  std::string m_builder;
 
   // OpenGL variables:
   GLuint m_pboOutputBuffer;
@@ -152,9 +168,14 @@ private:
 
   PinholeCamera m_pinholeCamera;
 
-  // Colors for the miss_gradient program:
-  optix::float3 m_colorBottom;
-  optix::float3 m_colorTop;
+  Timer m_timer;
+
+  optix::Material m_opaqueMaterial;
+
+  // The root node of the OptiX scene graph (sysTopObject)
+  optix::Group        m_rootGroup;
+  optix::Acceleration m_rootAcceleration;
+
 
 };
 

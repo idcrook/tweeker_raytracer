@@ -33,6 +33,7 @@
 #include <optix.h>
 #include <optixu/optixpp_namespace.h>
 #include <optixu/optixu_math_namespace.h>
+#include <optixu/optixu_matrix_namespace.h>
 
 #include <algorithm>
 #include <cstring>
@@ -149,6 +150,7 @@ Application::Application(GLFWwindow* window,
   ImGui::EndFrame();
 
   // Renderer setup and GUI parameters.
+  m_builder = std::string("Trbvh");
 
   // GLSL shaders objects and program.
   m_glslVS      = 0;
@@ -162,11 +164,6 @@ Application::Application(GLFWwindow* window,
   m_mouseSpeedRatio = 10.0f;
 
   m_pinholeCamera.setViewport(m_width, m_height);
-
-  // m_colorBottom = optix::make_float3(0.0f);
-  // m_colorTop    = optix::make_float3(1.0f);
-  m_colorBottom = optix::make_float3(0.462745f, 0.72549f, 0.0f);
-  m_colorTop    = optix::make_float3(0.45f, 0.55f, 0.60f);
 
   initOpenGL();
   initOptiX(); // Sets m_isValid when OptiX initialization was successful.
@@ -433,6 +430,7 @@ void Application::initRenderer()
 
     // Add context-global variables here.
 
+    // RT_BUFFER_INPUT_OUTPUT to support accumulation.
     // In case of an OpenGL interop buffer, that is automatically registered with CUDA now! Must unregister/register around size changes.
     m_bufferOutput = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_INPUT_OUTPUT, m_pboOutputBuffer)
                                  : m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT);
@@ -459,8 +457,6 @@ void Application::initRenderer()
     m_context["sysCameraV"]->setFloat(0.0f, 1.0f, 0.0f);
     m_context["sysCameraW"]->setFloat(0.0f, 0.0f, -1.0f);
 
-    m_context["sysColorBottom"]->setFloat(m_colorBottom);
-    m_context["sysColorTop"]->setFloat(m_colorTop);
   }
   catch(optix::Exception& e)
   {
@@ -472,14 +468,27 @@ void Application::initScene()
 {
   try
   {
-    // Generate an empty Group node as scene root object, to be able to fill sysTopObject.
-    optix::Acceleration accRoot = m_context->createAcceleration(std::string("NoAccel"));
+    m_timer.restart();
+    const double timeInit = m_timer.getTime();
 
-    optix::Group groupRoot = m_context->createGroup();
-    groupRoot->setAcceleration(accRoot);
-    groupRoot->setChildCount(0); // Default.
+    std::cout << "createScene()" << std::endl;
+    createScene();
+    const double timeScene = m_timer.getTime();
 
-    m_context["sysTopObject"]->set(groupRoot);
+    std::cout << "m_context->validate()" << std::endl;
+    m_context->validate();
+    const double timeValidate = m_timer.getTime();
+
+    std::cout << "m_context->launch()" << std::endl;
+    m_context->launch(0, 0, 0); // Dummy launch to build everything (entrypoint, width, height)
+    const double timeLaunch = m_timer.getTime();
+
+    std::cout << "initScene(): " << timeLaunch - timeInit << " seconds overall" << std::endl;
+    std::cout << "{" << std::endl;
+    std::cout << "  createScene() = " << timeScene    - timeInit     << " seconds" << std::endl;
+    std::cout << "  validate()    = " << timeValidate - timeScene    << " seconds" << std::endl;
+    std::cout << "  launch()      = " << timeLaunch   - timeValidate << " seconds" << std::endl;
+    std::cout << "}" << std::endl;
   }
   catch(optix::Exception& e)
   {
@@ -706,16 +715,11 @@ void Application::guiWindow()
 
   if (ImGui::CollapsingHeader("System"))
   {
-    if (ImGui::ColorEdit3("Top Color", (float*) &m_colorTop))
+    if (ImGui::DragFloat("Mouse Ratio", &m_mouseSpeedRatio, 0.1f, 0.1f, 100.0f, "%.1f"))
     {
-      m_context["sysColorTop"]->setFloat(m_colorTop);
-    }
-    if (ImGui::ColorEdit3("Bottom Color", (float*) &m_colorBottom))
-    {
-      m_context["sysColorBottom"]->setFloat(m_colorBottom);
+      m_pinholeCamera.setSpeedRatio(m_mouseSpeedRatio);
     }
   }
-
   ImGui::PopItemWidth();
 
   ImGui::End();
@@ -803,6 +807,47 @@ void Application::guiEventHandler()
   }
 }
 
+// This part is always identical in the generated geometry creation routines.
+optix::Geometry Application::createGeometry(std::vector<VertexAttributes> const& attributes, std::vector<unsigned int> const& indices)
+{
+  optix::Geometry geometry(nullptr);
+
+  try
+  {
+    geometry = m_context->createGeometry();
+
+    optix::Buffer attributesBuffer = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_USER);
+    attributesBuffer->setElementSize(sizeof(VertexAttributes));
+    attributesBuffer->setSize(attributes.size());
+
+    void *dst = attributesBuffer->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+    memcpy(dst, attributes.data(), sizeof(VertexAttributes) * attributes.size());
+    attributesBuffer->unmap();
+
+    optix::Buffer indicesBuffer = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_UNSIGNED_INT3, indices.size() / 3);
+    dst = indicesBuffer->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+    memcpy(dst, indices.data(), sizeof(optix::uint3) * indices.size() / 3);
+    indicesBuffer->unmap();
+
+    std::map<std::string, optix::Program>::const_iterator it = m_mapOfPrograms.find("boundingbox_triangle_indexed");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    geometry->setBoundingBoxProgram(it->second);
+
+    it = m_mapOfPrograms.find("intersection_triangle_indexed");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    geometry->setIntersectionProgram(it->second);
+
+    geometry["attributesBuffer"]->setBuffer(attributesBuffer);
+    geometry["indicesBuffer"]->setBuffer(indicesBuffer);
+    geometry->setPrimitiveCount((unsigned int)(indices.size()) / 3);
+  }
+  catch(optix::Exception& e)
+  {
+    std::cerr << e.getErrorString() << std::endl;
+  }
+  return geometry;
+}
+
 
 void Application::initPrograms()
 {
@@ -812,15 +857,163 @@ void Application::initPrograms()
     // Programs which are reused multiple times can be queried from that map.
     // (This renderer does not put variables on program scope!)
 
-
     // Renderer
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
-    m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception");     // entry point 0
-    m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_gradient"); // ray type 0
+    m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception"); // entry point 0
 
+    // Constant white environment.
+    m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_constant"); // raytype 0
+
+    // Geometry
+    m_mapOfPrograms["boundingbox_triangle_indexed"]  = m_context->createProgramFromPTXFile(ptxPath("boundingbox_triangle_indexed.cu"),  "boundingbox_triangle_indexed");
+    m_mapOfPrograms["intersection_triangle_indexed"] = m_context->createProgramFromPTXFile(ptxPath("intersection_triangle_indexed.cu"), "intersection_triangle_indexed");
+
+    // Material programs.
+    // For the radiance ray type 0:
+    m_mapOfPrograms["closesthit"] = m_context->createProgramFromPTXFile(ptxPath("closesthit.cu"), "closesthit");
   }
   catch(optix::Exception& e)
   {
     std::cerr << e.getErrorString() << std::endl;
+  }
+}
+
+void Application::initMaterials()
+{
+  try
+  {
+    // Create the main Material node
+
+    std::map<std::string, optix::Program>::const_iterator it;
+
+    // Used for all materials without cutout opacity. (Faster than using the cutout opacity material for everything.)
+    m_opaqueMaterial = m_context->createMaterial();
+    it = m_mapOfPrograms.find("closesthit");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_opaqueMaterial->setClosestHitProgram(0, it->second); // raytype 0 == radiance
+    // No anyhit program needed for this Material and ray type.
+  }
+  catch(optix::Exception& e)
+  {
+    std::cerr << e.getErrorString() << std::endl;
+  }
+}
+
+
+// Scene testing all materials on a single geometry instanced via transforms and sharing one acceleration structure.
+void Application::createScene()
+{
+  initMaterials();
+
+  try
+  {
+    // OptiX Scene Graph construction.
+    m_rootAcceleration = m_context->createAcceleration(m_builder); // No need to set acceleration properties on the top level Acceleration.
+
+    m_rootGroup = m_context->createGroup(); // The scene's root group nodes becomes the sysTopObject.
+    m_rootGroup->setAcceleration(m_rootAcceleration);
+
+    m_context["sysTopObject"]->set(m_rootGroup); // This is where the rtTrace calls start the BVH traversal. (Same for radiance and shadow rays.)
+
+    unsigned int count;
+
+    // Demo code only!
+    // Mind that these local OptiX objects will leak when not cleaning up the scene properly on changes.
+    // Destroying the OptiX context will clean them up at program exit though.
+
+    // Add a ground plane on the xz-plane at y = 0.0f with a 1x1 tesselation (2 triangles).
+    optix::Geometry geoPlane = createPlane(1, 1, 1);
+
+    optix::GeometryInstance giPlane = m_context->createGeometryInstance(); // This connects Geometries with Materials.
+    giPlane->setGeometry(geoPlane);
+    giPlane->setMaterialCount(1);
+    giPlane->setMaterial(0, m_opaqueMaterial);
+
+    optix::Acceleration accPlane = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accPlane);
+
+    // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
+    optix::GeometryGroup ggPlane = m_context->createGeometryGroup();
+    ggPlane->setAcceleration(accPlane);
+    ggPlane->setChildCount(1);
+    ggPlane->setChild(0, giPlane);
+
+    // The original object coordinates of the plane have unit size, from -1.0f to 1.0f in x-axis and z-axis.
+    // Scale the plane to go from -5 to 5.
+    float trafoPlane[16] =
+    {
+      5.0f, 0.0f, 0.0f, 0.0f,
+      0.0f, 5.0f, 0.0f, 0.0f,
+      0.0f, 0.0f, 5.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+    optix::Matrix4x4 matrixPlane(trafoPlane);
+
+    optix::Transform trPlane = m_context->createTransform();
+    trPlane->setChild(ggPlane);
+    trPlane->setMatrix(false, matrixPlane.getData(), matrixPlane.inverse().getData());
+
+    // Add the transform node placeing the plane to the scene's root Group node.
+    count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, trPlane);
+
+    // Add a tessellated sphere with 180 longitudes and 90 latitudes (32400 triangles) with radius 1.0f around the origin.
+    // The last argument is the maximum theta angle, which allows to generate spheres with a whole at the top.
+    // (Useful to test thin-walled materials with different materials on the front- and backface.)
+    optix::Geometry geoSphere = createSphere(180, 90, 1.0f, M_PIf);
+
+    optix::Acceleration accSphere = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accSphere);
+
+    optix::GeometryInstance giSphere = m_context->createGeometryInstance(); // This connects Geometries with Materials.
+    giSphere->setGeometry(geoSphere);
+    giSphere->setMaterialCount(1);
+    giSphere->setMaterial(0, m_opaqueMaterial);
+
+    optix::GeometryGroup ggSphere = m_context->createGeometryGroup();    // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
+    ggSphere->setAcceleration(accSphere);
+    ggSphere->setChildCount(1);
+    ggSphere->setChild(0, giSphere);
+
+    float trafoSphere[16] =
+    {
+      1.0f, 0.0f, 0.0f, 0.0f,
+      0.0f, 1.0f, 0.0f, 1.0f, // Translate the sphere by 1.0f on the y-axis to be above the plane, exactly touching.
+      0.0f, 0.0f, 1.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+    optix::Matrix4x4 matrixSphere(trafoSphere);
+
+    optix::Transform trSphere = m_context->createTransform();
+    trSphere->setChild(ggSphere);
+    trSphere->setMatrix(false, matrixSphere.getData(), matrixSphere.inverse().getData());
+
+    count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, trSphere);
+  }
+  catch(optix::Exception& e)
+  {
+    std::cerr << e.getErrorString() << std::endl;
+  }
+}
+
+
+void Application::setAccelerationProperties(optix::Acceleration acceleration)
+{
+  // To speed up the acceleration structure build for triangles, skip calls to the bounding box program and
+  // invoke the special splitting BVH builder for indexed triangles by setting the necessary acceleration properties.
+  // Using the fast Trbvh builder which does splitting has a positive effect on the rendering performanc as well.
+  if (m_builder == std::string("Trbvh") || m_builder == std::string("Sbvh"))
+  {
+    // This requires that the position is the first element and it must be float x, y, z.
+    acceleration->setProperty("vertex_buffer_name", "attributesBuffer");
+    MY_ASSERT(sizeof(VertexAttributes) == 48) ;
+    acceleration->setProperty("vertex_buffer_stride", "48");
+
+    acceleration->setProperty("index_buffer_name", "indicesBuffer");
+    MY_ASSERT(sizeof(optix::uint3) == 12) ;
+    acceleration->setProperty("index_buffer_stride", "12");
   }
 }

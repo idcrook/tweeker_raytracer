@@ -160,6 +160,31 @@ add_subdirectory(sutil)
 OPTIX_add_sample_executable( optixGui
   main.cpp
 
+  include/Application.h
+  Application.cpp
+
+  Plane.cpp
+  Sphere.cpp
+
+  include/Timer.h
+  Timer.cpp
+
+  include/PinholeCamera.h
+  PinholeCamera.cpp
+
+  shaders/app_config.cuh
+  shaders/rt_function.cuh
+  shaders/per_ray_data.cuh
+  shaders/vertex_attributes.cuh
+
+  shaders/raygeneration.cu
+  shaders/closesthit.cu
+  shaders/miss.cu
+  shaders/exception.cu
+
+  shaders/boundingbox_triangle_indexed.cu
+  shaders/intersection_triangle_indexed.cu
+
   include/MyAssert.h
 
   bindings/imgui_impl_glfw.h
@@ -169,17 +194,5 @@ OPTIX_add_sample_executable( optixGui
   bindings/imgui_impl_opengl3.h
   bindings/imgui_impl_opengl3.cpp
 
-  include/Application.h
-  Application.cpp
 
-  include/PinholeCamera.h
-  PinholeCamera.cpp
-
-  shaders/app_config.cuh
-  shaders/rt_function.cuh
-  shaders/per_ray_data.cuh
-
-  shaders/raygeneration.cu
-  shaders/exception.cu
-  shaders/miss.cu
 )

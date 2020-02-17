@@ -26,17 +26,17 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "app_config.cuh"
+#pragma once
 
-#include <optix.h>
-#include <optixu/optixu_math_namespace.h>
+#ifndef VERTEX_ATTRIBUTES_CUH
+#define VERTEX_ATTRIBUTES_CUH
 
-#include "per_ray_data.cuh"
-
-rtDeclareVariable(PerRayData, thePrd, rtPayload, );
-
-
-RT_PROGRAM void miss_environment_constant()
+struct VertexAttributes
 {
-  thePrd.radiance = make_float3(1.0f); // Constant white emission.
-}
+  optix::float3 vertex;
+  optix::float3 tangent;
+  optix::float3 normal;
+  optix::float3 texcoord;
+};
+
+#endif // VERTEX_ATTRIBUTES_CUH
