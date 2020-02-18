@@ -61,13 +61,17 @@ Application::Application(GLFWwindow* window,
                          const int height,
                          const unsigned int devices,
                          const unsigned int stackSize,
-                         const bool interop)
+                         const bool interop,
+                         const bool light,
+                         const unsigned int miss)
 : m_window(window)
 , m_width(width)
 , m_height(height)
 , m_devicesEncoding(devices)
 , m_stackSize(stackSize)
 , m_interop(interop)
+, m_light(light)
+, m_missID(miss)
 
 {
 
@@ -152,7 +156,7 @@ Application::Application(GLFWwindow* window,
 
   // Renderer setup and GUI parameters.
   m_minPathLength       = 2;    // Minimum path length after which Russian Roulette path termination starts.
-  m_maxPathLength       = 2;    // Maximum path length. (Need at least 6 path segments to go through a glass sphere, hit something, and back through that sphere to the viewer.)
+  m_maxPathLength       = 6;    // Maximum path length. (Need at least 6 path segments to go through a glass sphere, hit something, and back through that sphere to the viewer.)
   m_sceneEpsilonFactor  = 500;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
 
   m_present         = false;  // Update once per second. (The first half second shows all frames to get some initial accumulation).
@@ -168,24 +172,24 @@ Application::Application(GLFWwindow* window,
   m_glslFS      = 0;
   m_glslProgram = 0;
 
-  // Settings normally used.
-  //m_gamma          = 2.2f;
-  //m_colorBalance   = optix::make_float3(1.0f);
-  //m_whitePoint     = 1.0f;
-  //m_burnHighlights = 0.8f;
-  //m_crushBlacks    = 0.2f;
-  //m_saturation     = 1.2f;
-  //m_brightness     = 0.8f;
+  m_gamma          = 2.2f;
+  m_colorBalance   = optix::make_float3(1.0f, 1.0f, 1.0f);
+  m_whitePoint     = 1.0f;
+  m_burnHighlights = 0.8f;
+  m_crushBlacks    = 0.2f;
+  m_saturation     = 1.2f;
+  m_brightness     = 0.8f;
 
   // Neutral tonemapper settings.
   // This sample begins with an Ambient Occlusion like rendering setup. Make sure the the image stays white.
-  m_gamma          = 2.2f; // Neutral would be 1.0f.
-  m_colorBalance   = optix::make_float3(1.0f);
-  m_whitePoint     = 1.0f;
-  m_burnHighlights = 1.0f;
-  m_crushBlacks    = 0.0f;
-  m_saturation     = 1.0f;
-  m_brightness     = 1.0f;
+  // DAR DEBUG Neutral tonemapper settings.
+  //m_gamma          = 1.0f;
+  //m_colorBalance   = optix::make_float3(1.0f, 1.0f, 1.0f);
+  //m_whitePoint     = 1.0f;
+  //m_burnHighlights = 1.0f;
+  //m_crushBlacks    = 0.0f;
+  //m_saturation     = 1.0f;
+  //m_brightness     = 1.0f;
 
   m_guiState = GUI_STATE_NONE;
 
@@ -447,7 +451,7 @@ void Application::initRenderer()
   try
   {
     m_context->setEntryPointCount(1);  // 0 = render // Tonemapper is a GLSL shader in this case.
-    m_context->setRayTypeCount(1);    // 0 = radiance
+    m_context->setRayTypeCount(2);    // 0 = radiance, 1 = shadow
 
 
     m_context->setStackSize(m_stackSize);
@@ -923,6 +927,38 @@ void Application::guiWindow()
     }
   }
 
+  if (ImGui::CollapsingHeader("Lights"))
+  {
+    bool changed = false;
+
+    for (int i = 0; i < int(m_lightDefinitions.size()); ++i)
+    {
+      LightDefinition& light = m_lightDefinitions[i];
+
+      // Allow to change the emission (radiant exitance in Watt/m^2 of the rectangle lights in the scene.
+      if (light.type == LIGHT_PARALLELOGRAM)
+      {
+        if (ImGui::TreeNode((void*)(intptr_t) i, "Light %d", i))
+        {
+          if (ImGui::DragFloat3("Emission", (float*) &light.emission, 1.0f, 0.0f, 10000.0f, "%.0f"))
+          {
+            changed = true;
+          }
+          ImGui::TreePop();
+        }
+      }
+    }
+    if (changed) // If any of the light parameters changed, simply upload them to the sysMaterialParameters again.
+    {
+      // Upload the light definitions into the sysLightDefinitions buffer.
+      void* dst = static_cast<LightDefinition*>(m_bufferLightDefinitions->map(0, RT_BUFFER_MAP_WRITE_DISCARD));
+      memcpy(dst, m_lightDefinitions.data(), sizeof(LightDefinition) * m_lightDefinitions.size());
+      m_bufferLightDefinitions->unmap();
+
+      restartAccumulation();
+    }
+  }
+
 
   ImGui::PopItemWidth();
 
@@ -1055,6 +1091,7 @@ optix::Geometry Application::createGeometry(std::vector<VertexAttributes> const&
 
 void Application::initPrograms()
 {
+  std::cerr << "DEBUG: MissID " << m_missID << std::endl;
   try
   {
     // First load all programs and put them into a map.
@@ -1065,16 +1102,63 @@ void Application::initPrograms()
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
     m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception"); // entry point 0
 
-    m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_constant"); // raytype 0
+    // There can be only one of the miss programs active.
+    switch (m_missID)
+    {
+    case 0: // Default black environment. Does not appear in the light definitions, means it's not used in direct lighting.
+      m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_null"); // ray type 0
+      break;
+    case 1:
+    default:
+      m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_constant"); // raytype 0
+      break;
+    }
 
     // Geometry
     m_mapOfPrograms["boundingbox_triangle_indexed"]  = m_context->createProgramFromPTXFile(ptxPath("boundingbox_triangle_indexed.cu"),  "boundingbox_triangle_indexed");
     m_mapOfPrograms["intersection_triangle_indexed"] = m_context->createProgramFromPTXFile(ptxPath("intersection_triangle_indexed.cu"), "intersection_triangle_indexed");
 
-    // Material programs. There are only three Material nodes, opaque, cutout
-    // opacity and rectangle lights.
+    // Material programs. There are only two Material nodes, opaque and rectangle lights.
     // For the radiance ray type 0
     m_mapOfPrograms["closesthit"] = m_context->createProgramFromPTXFile(ptxPath("closesthit.cu"), "closesthit");
+    m_mapOfPrograms["closesthit_light"] = m_context->createProgramFromPTXFile(ptxPath("closesthit_light.cu"), "closesthit_light");
+    // For the shadow ray type 1:
+    m_mapOfPrograms["anyhit_shadow"]    = m_context->createProgramFromPTXFile(ptxPath("anyhit.cu"), "anyhit_shadow");        // Opaque
+
+    // PERF One possible optimization to reduce the OptiX kernel size even more
+    // is to only download the programs for materials actually present in the scene. Not done in this demo.
+
+    // Light sampling functions.
+    // There are only two light types implemented in this renderer: environment lights and parallelogram area lights.
+    m_bufferSampleLight = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_PROGRAM_ID, 2);
+    int* sampleLight = (int*) m_bufferSampleLight->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+
+    sampleLight[LIGHT_ENVIRONMENT]   = RT_PROGRAM_ID_NULL;
+    sampleLight[LIGHT_PARALLELOGRAM] = RT_PROGRAM_ID_NULL;
+
+    optix::Program prg;
+
+    switch (m_missID)
+    {
+    case 0: // Default black environment. // PERF This is not a light, means it doesn't appear in the sysLightDefinitions!
+    default:
+      break;
+    case 1:
+      prg = m_context->createProgramFromPTXFile(ptxPath("light_sample.cu"), "sample_light_constant");
+      m_mapOfPrograms["sample_light_constant"] = prg;
+      sampleLight[LIGHT_ENVIRONMENT] = prg->getId();
+      break;
+    }
+
+    // PERF Again, to optimize the kernel size this program would only be needed if there are parallelogram lights in the scene.
+    prg = m_context->createProgramFromPTXFile(ptxPath("light_sample.cu"), "sample_light_parallelogram");
+    m_mapOfPrograms["sample_light_parallelogram"] = prg;
+    sampleLight[LIGHT_PARALLELOGRAM] = prg->getId();
+
+    m_bufferSampleLight->unmap();
+
+    m_context["sysSampleLight"]->setBuffer(m_bufferSampleLight);
+
   }
   catch(optix::Exception& e)
   {
@@ -1105,18 +1189,31 @@ void Application::initMaterials()
   // Setup GUI material parameters, one for each of the objects in the scene.
   MaterialParameterGUI parameters;
 
-  // Make all parameters white to show automatic ambient occlusion with a brute force full global illumination path tracer.
-  parameters.albedo = optix::make_float3(1.0f);
+  // Use a different color per object to show lighting effects.
+  parameters.albedo = optix::make_float3(0.5f);
   m_guiMaterialParameters.push_back(parameters); // 0, floor
 
-  parameters.albedo = optix::make_float3(1.0f);
+  parameters.albedo = optix::make_float3(0.5, 0.0f, 0.0f);
   m_guiMaterialParameters.push_back(parameters); // 1, box
 
-  parameters.albedo = optix::make_float3(1.0f);
+  parameters.albedo = optix::make_float3(0.0f, 0.5f, 0.0f);
   m_guiMaterialParameters.push_back(parameters); // 2, sphere
 
-  parameters.albedo = optix::make_float3(1.0f);
+  parameters.albedo = optix::make_float3(0.0f, 0.0f, 0.5f);
   m_guiMaterialParameters.push_back(parameters); // 3, torus
+
+  // // Make all parameters white to show automatic ambient occlusion with a brute force full global illumination path tracer.
+  // parameters.albedo = optix::make_float3(1.0f);
+  // m_guiMaterialParameters.push_back(parameters); // 0, floor
+
+  // parameters.albedo = optix::make_float3(1.0f);
+  // m_guiMaterialParameters.push_back(parameters); // 1, box
+
+  // parameters.albedo = optix::make_float3(1.0f);
+  // m_guiMaterialParameters.push_back(parameters); // 2, sphere
+
+  // parameters.albedo = optix::make_float3(1.0f);
+  // m_guiMaterialParameters.push_back(parameters); // 3, torus
 
   try
   {
@@ -1128,15 +1225,29 @@ void Application::initMaterials()
 
     m_context["sysMaterialParameters"]->setBuffer(m_bufferMaterialParameters);
 
-    // Create the main Material node to have the matching closest hit and any hit programs.
+    // Create the two main Material nodes to have the matching closest hit and any hit programs.
 
     std::map<std::string, optix::Program>::const_iterator it;
 
-    // Used for all objects in the scene.
+    // Used for all materials without cutout opacity. (Faster than using the cutout opacity material for everything.)
     m_opaqueMaterial = m_context->createMaterial();
     it = m_mapOfPrograms.find("closesthit");
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_opaqueMaterial->setClosestHitProgram(0, it->second); // raytype radiance
+
+    it = m_mapOfPrograms.find("anyhit_shadow");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_opaqueMaterial->setAnyHitProgram(1, it->second); // raytype shadow
+
+    // Used for all geometric lights.
+    m_lightMaterial = m_context->createMaterial();
+    it = m_mapOfPrograms.find("closesthit_light"); // Special cased closest hit program for rectangle lights, diffuse EDF.
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_lightMaterial->setClosestHitProgram(0, it->second); // raytype radiance
+
+    it = m_mapOfPrograms.find("anyhit_shadow"); // Paralellogram area lights are opaque and throw shadows from other lights.
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_lightMaterial->setAnyHitProgram(1, it->second); // raytype shadow
   }
   catch(optix::Exception& e)
   {
@@ -1302,6 +1413,8 @@ void Application::createScene()
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);
     m_rootGroup->setChild(count, trTorus);
+
+    createLights(); // Put lights into the scene.
   }
   catch(optix::Exception& e)
   {
@@ -1314,7 +1427,7 @@ void Application::setAccelerationProperties(optix::Acceleration acceleration)
 {
   // To speed up the acceleration structure build for triangles, skip calls to the bounding box program and
   // invoke the special splitting BVH builder for indexed triangles by setting the necessary acceleration properties.
-  // Using the fast Trbvh builder which does splitting has a positive effect on the rendering performanc as well.
+  // Using the fast Trbvh builder which does splitting has a positive effect on the rendering performance as well!
   if (m_builder == std::string("Trbvh") || m_builder == std::string("Sbvh"))
   {
     // This requires that the position is the first element and it must be float x, y, z.
@@ -1326,4 +1439,89 @@ void Application::setAccelerationProperties(optix::Acceleration acceleration)
     MY_ASSERT(sizeof(optix::uint3) == 12) ;
     acceleration->setProperty("index_buffer_stride", "12");
   }
+}
+
+void Application::createLights()
+{
+  LightDefinition light;
+
+  // Unused in environment lights.
+  light.position = optix::make_float3(0.0f, 0.0f, 0.0f);
+  light.vecU     = optix::make_float3(1.0f, 0.0f, 0.0f);
+  light.vecV     = optix::make_float3(0.0f, 1.0f, 0.0f);
+  light.normal   = optix::make_float3(0.0f, 0.0f, 1.0f);
+  light.area     = 1.0f;
+  light.emission = optix::make_float3(1.0f, 1.0f, 1.0f);
+
+  // The environment light is expected in sysLightDefinitions[0]!
+  // All other lights are indexed by their position inside the array.
+  switch (m_missID)
+  {
+  case 0: // No environment light at all. Faster than a zero emission constant environment!
+  default:
+    break;
+
+  case 1: // Constant environment light.
+    light.type = LIGHT_ENVIRONMENT;
+    light.area = 4.0f * M_PIf; // Unused.
+
+    m_lightDefinitions.push_back(light);
+    break;
+  }
+
+  if (m_light)  // Add a square area light over the scene objects.
+  {
+    light.type      = LIGHT_PARALLELOGRAM;                    // A geometric area light with diffuse emission distribution function.
+    light.position  = optix::make_float3(-0.5f, 4.0f, -0.5f); // Corner position.
+    light.vecU      = optix::make_float3(1.0f, 0.0f, 0.0f);   // To the right.
+    light.vecV      = optix::make_float3(0.0f, 0.0f, 1.0f);   // To the front.
+    optix::float3 n = optix::cross(light.vecU, light.vecV);   // Length of the cross product is the area.
+    light.area     = optix::length(n);                        // Calculate the world space area of that rectangle. (25 m^2)
+    light.normal   = n / light.area;                          // Normalized normal
+    light.emission = optix::make_float3(100.0f);              // Radiant exitance in Watt/m^2.
+
+    int lightIndex = int(m_lightDefinitions.size()); // This becomes this light's parLightIndex value.
+    m_lightDefinitions.push_back(light);
+
+    // Create the actual area light geometry in the scene. This creates just two triangles, because I do not want to have another intersection routine for code size and performance reasons.
+    optix::Geometry geoLight = createParallelogram(light.position, light.vecU, light.vecV, light.normal);
+
+    optix::GeometryInstance giLight = m_context->createGeometryInstance(); // This connects Geometries with Materials.
+    giLight->setGeometry(geoLight);
+    giLight->setMaterialCount(1);
+    giLight->setMaterial(0, m_lightMaterial);
+    giLight["parLightIndex"]->setInt(lightIndex);
+
+    optix::Acceleration accLight = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accLight);
+
+    optix::GeometryGroup ggLight = m_context->createGeometryGroup(); // This connects GeometryInstances with Acceleration structures. (All OptiX nodes with "Group" in the name hold an Acceleration.)
+    ggLight->setAcceleration(accLight);
+    ggLight->setChildCount(1);
+    ggLight->setChild(0, giLight);
+
+    // Area lights are defined in world space just to make sampling simpler in this demo.
+    // Attach it directly to the scene's root node directly.
+    unsigned int count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, ggLight);
+  }
+
+  // Put the light definitions into the sysLightDefinitions buffer.
+  MY_ASSERT((sizeof(LightDefinition) & 15) == 0); // Check alignment to float4
+
+  m_bufferLightDefinitions = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_USER);
+  m_bufferLightDefinitions->setElementSize(sizeof(LightDefinition));
+  m_bufferLightDefinitions->setSize(m_lightDefinitions.size()); // This can be zero.
+
+  if (m_lightDefinitions.size())
+  {
+    // Put the light definitions into the sysLightDefinitions buffer.
+    void* dst = static_cast<LightDefinition*>(m_bufferLightDefinitions->map(0, RT_BUFFER_MAP_WRITE_DISCARD));
+    memcpy(dst, m_lightDefinitions.data(), sizeof(LightDefinition) * m_lightDefinitions.size());
+    m_bufferLightDefinitions->unmap();
+  }
+
+  m_context["sysLightDefinitions"]->setBuffer(m_bufferLightDefinitions);
+  m_context["sysNumLights"]->setInt(int(m_lightDefinitions.size())); // PERF Used often and faster to read than sysLightDefinitions.size().
 }

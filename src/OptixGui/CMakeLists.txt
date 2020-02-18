@@ -39,6 +39,11 @@ INCLUDE_DIRECTORIES(
   ${IL_INCLUDE_DIR}
   )
 
+# # Tells CMake to build all the libraries as shared libraries by default.  This can be
+# # overrided by individual libraries later.
+# set(BUILD_SHARED_LIBS ON)
+
+
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
 
@@ -51,6 +56,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
+  find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
 
   # Defines OptiX utilities and variables
   INCLUDE(configure_optix)
@@ -70,6 +76,54 @@ find_package(OpenGL REQUIRED)
 # image loading
 find_package(DevIL REQUIRED)
 
+if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
+  include_directories( ${OPENGL_INCLUDE_DIR} )
+endif()
+
+##################################################################
+# CUDA config
+
+# Present the CUDA_64_BIT_DEVICE_CODE on the default set of options.
+mark_as_advanced(CLEAR CUDA_64_BIT_DEVICE_CODE)
+
+# Add some useful default arguments to the nvcc flags.  This is an example of how we use
+# PASSED_FIRST_CONFIGURE.  Once you have configured, this variable is TRUE and following
+# block of code will not be executed leaving you free to edit the values as much as you
+# wish from the GUI or from ccmake.
+if(NOT PASSED_FIRST_CONFIGURE)
+
+  list(APPEND default_nvcc_flags "--use_fast_math" "-arch sm_30" "-lineinfo")
+
+  if (CUDA_VERSION VERSION_LESS "3.0")
+    list(APPEND default_nvcc_flags "--keep")
+  endif()
+
+  if( APPLE )
+    # Undef'ing __BLOCKS__ for OSX builds.  This is due to a name clash between OSX 10.6
+    # C headers and CUDA headers
+    list(APPEND default_nvcc_flags "-U__BLOCKS__")
+  endif()
+
+  # Append to nvcc flags
+  foreach(flag IN LISTS default_nvcc_flags)
+    list(FIND CUDA_NVCC_FLAGS ${flag} index)
+    if(index EQUAL -1)
+      list(APPEND CUDA_NVCC_FLAGS ${flag})
+      set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} CACHE LIST "Semi-colon delimit multiple arguments." FORCE)
+    endif()
+  endforeach(flag)
+
+endif(NOT PASSED_FIRST_CONFIGURE)
+
+# Add required nvcc flag for callable programs under CUDA 8
+if (CUDA_VERSION VERSION_GREATER "7.5")
+  set(flag "--keep-device-functions")
+  list(FIND CUDA_NVCC_FLAGS ${flag} index)
+  if(index EQUAL -1)
+    list(APPEND CUDA_NVCC_FLAGS ${flag})
+    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} CACHE LIST "Semi-colon delimit multiple arguments." FORCE)
+  endif()
+endif()
 
 ##################################################################
 # SUtil compilation
@@ -164,6 +218,7 @@ OPTIX_add_sample_executable( optixGui
   Application.cpp
 
   Box.cpp
+  Parallelogram.cpp
   Plane.cpp
   Sphere.cpp
   Torus.cpp
@@ -174,15 +229,16 @@ OPTIX_add_sample_executable( optixGui
   include/PinholeCamera.h
   PinholeCamera.cpp
 
-  shaders/app_config.cuh
   include/MyAssert.h
 
-  shaders/material_parameter.cuh
-  shaders/per_ray_data.cuh
-  shaders/random_number_generators.cuh
+  shaders/app_config.cuh
   shaders/rt_assert.cuh
   shaders/rt_function.cuh
   shaders/shader_common.cuh
+  shaders/light_definition.cuh
+  shaders/material_parameter.cuh
+  shaders/per_ray_data.cuh
+  shaders/random_number_generators.cuh
   shaders/vertex_attributes.cuh
 
   shaders/boundingbox_triangle_indexed.cu
@@ -193,11 +249,14 @@ OPTIX_add_sample_executable( optixGui
   shaders/exception.cu
 
   shaders/closesthit.cu
+  shaders/closesthit_light.cu
+
+  shaders/anyhit.cu
+
+  shaders/light_sample.cu
 
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_glfw.cpp
-  # bindings/imgui_impl_opengl2.h
-  # bindings/imgui_impl_opengl2.cpp
   bindings/imgui_impl_opengl3.h
   bindings/imgui_impl_opengl3.cpp
 

@@ -26,43 +26,50 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "app_config.cuh"
+#include "include/Application.h"
 
-#include <optix.h>
-#include <optixu/optixu_math_namespace.h>
+#include <cstring>
+#include <iostream>
+#include <sstream>
 
-#include "rt_function.cuh"
-#include "per_ray_data.cuh"
-#include "light_definition.cuh"
-#include "shader_common.cuh"
-
-rtDeclareVariable(optix::Ray, theRay, rtCurrentRay, );
-
-rtDeclareVariable(PerRayData, thePrd, rtPayload, );
-
-rtBuffer<LightDefinition> sysLightDefinitions;
-
-rtDeclareVariable(float, sysEnvironmentRotation, , );
-
-
-// Not actually a light. Never appears inside the sysLightDefinitions.
-RT_PROGRAM void miss_environment_null()
+// Parallelogram from footpoint position, spanned by unnormalized vectors vecU and vecV, normal is normalized and on the CCW frontface.
+optix::Geometry Application::createParallelogram(optix::float3 const& position, optix::float3 const& vecU, optix::float3 const& vecV, optix::float3 const& normal)
 {
-  thePrd.radiance = make_float3(0.0f);
+  std::vector<VertexAttributes> attributes;
 
-  thePrd.flags |= FLAG_TERMINATE;
-}
+  VertexAttributes attrib;
 
-RT_PROGRAM void miss_environment_constant()
-{
-#if USE_NEXT_EVENT_ESTIMATION
-  // If the last surface intersection was a diffuse which was directly lit with multiple importance sampling,
-  // then calculate light emission with multiple importance sampling as well.
-  const float weightMIS = (thePrd.flags & FLAG_DIFFUSE) ? powerHeuristic(thePrd.pdf, 0.25f * M_1_PIf) : 1.0f;
-  thePrd.radiance = make_float3(weightMIS); // Constant white emission multiplied by MIS weight.
-#else
-  thePrd.radiance = make_float3(1.0f); // Constant white emission.
-#endif
+  // Same for all four vertices in this parallelogram.
+  attrib.tangent   = optix::normalize(vecU);
+  attrib.normal    = normal;
 
-  thePrd.flags |= FLAG_TERMINATE;
+  attrib.vertex    = position; // left bottom
+  attrib.texcoord  = optix::make_float3(0.0f, 0.0f, 0.0f);
+  attributes.push_back(attrib);
+
+  attrib.vertex    = position + vecU; // right bottom
+  attrib.texcoord  = optix::make_float3(1.0f, 0.0f, 0.0f);
+  attributes.push_back(attrib);
+
+  attrib.vertex    = position + vecU + vecV; // right top
+  attrib.texcoord  = optix::make_float3(1.0f, 1.0f, 0.0f);
+  attributes.push_back(attrib);
+
+  attrib.vertex    = position + vecV; // left top
+  attrib.texcoord  = optix::make_float3(0.0f, 1.0f, 0.0f);
+  attributes.push_back(attrib);
+
+  std::vector<unsigned int> indices;
+
+  indices.push_back(0);
+  indices.push_back(1);
+  indices.push_back(2);
+
+  indices.push_back(2);
+  indices.push_back(3);
+  indices.push_back(0);
+
+  std::cout << "createParallelogram(): Vertices = " << attributes.size() <<  ", Triangles = " << indices.size() / 3 << std::endl;
+
+  return createGeometry(attributes, indices);
 }

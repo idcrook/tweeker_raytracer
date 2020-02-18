@@ -34,6 +34,7 @@
 #include "rt_function.cuh"
 #include "per_ray_data.cuh"
 #include "material_parameter.cuh"
+#include "light_definition.cuh"
 #include "shader_common.cuh"
 
 // Context global variables provided by the renderer system.
@@ -55,6 +56,11 @@ rtDeclareVariable(optix::float3, varNormal,    attribute NORMAL, );
 // Material parameter definition.
 rtBuffer<MaterialParameter> sysMaterialParameters; // Context global buffer with an array of structures of MaterialParameter.
 rtDeclareVariable(int,      parMaterialIndex, , ); // Per Material index into the sysMaterialParameters array.
+
+rtBuffer<LightDefinition> sysLightDefinitions;
+rtDeclareVariable(int,    sysNumLights, , );     // PERF Used many times and faster to read than sysLightDefinitions.size().
+
+rtBuffer< rtCallableProgramId<void(float3 const& point, const float2 sample, LightSample& lightSample)> > sysSampleLight;
 
 
 // Helper functions for sampling a cosine weighted hemisphere distrobution as needed for the Lambert shading model.
@@ -85,7 +91,6 @@ RT_FUNCTION void unitSquareToCosineHemisphere(const float2 sample, float3 const&
   alignVector(axis, w);
 }
 
-
 RT_PROGRAM void closesthit()
 {
   float3 geoNormal = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varGeoNormal));
@@ -106,13 +111,15 @@ RT_PROGRAM void closesthit()
   }
 
   // A material system with support for arbitrary mesh lights would evaluate its emission here.
+  // But since only parallelogram area lights are supported, those get a dedicated closest hit program to simplify this demo.
   thePrd.radiance = make_float3(0.0f);
 
   // Start fresh with the next BSDF sample.  (Either of these values remaining zero is an end-of-path condition.)
   thePrd.f_over_pdf = make_float3(0.0f);
   thePrd.pdf        = 0.0f;
 
-  // Lambert sampling: Cosine weighted hemisphere sampling above the shading normal.
+  // Lambert sampling:
+  // Cosine weighted hemisphere sampling above the shading normal.
   // This calculates the ray.direction for the next path segment in wi and its probability density function value in pdf.
   unitSquareToCosineHemisphere(rng2(thePrd.seed), normal, thePrd.wi, thePrd.pdf);
 
@@ -126,14 +133,51 @@ RT_PROGRAM void closesthit()
 
   MaterialParameter parameters = sysMaterialParameters[parMaterialIndex];
 
-  // This would be the universal implementation for an arbitrary sampling of a diffuse surface.
-  // thePrd.f_over_pdf = parameters.albedo * (M_1_PIf * fabsf(optix::dot(prd.wi, normal)) / prd.pdf);
+  thePrd.f_over_pdf = parameters.albedo * (M_1_PIf * optix::dot(thePrd.wi, normal) / thePrd.pdf); // PERF wi and normal are in the same hemisphere, no fabsf() needed on the cosTheta.
+  thePrd.flags     |= FLAG_DIFFUSE;
 
-  // PERF Since the cosine-weighted hemisphere distribution is a perfect importance-sampling of the Lambert material,
-  // the whole term ((M_1_PIf * fabsf(optix::dot(prd.wi, normal)) / prd.pdf) is always 1.0f here!
-  thePrd.f_over_pdf = parameters.albedo;
+#if USE_NEXT_EVENT_ESTIMATION
+  // Direct lighting if the sampled BSDF was diffuse and any light is in the scene.
+  if ( /* (thePrd.flags & FLAG_DIFFUSE) && */ 0 < sysNumLights) // No need to check FLAG_DIFFUSE. That has been set one line above. See in optixIntro_07 when this is needed.
+  {
+    const float2 sample = rng2(thePrd.seed); // Use lower dimension samples for the position. (Irrelevant for the LCG).
 
-  // This is a brute-force path tracer. There is no next event estimation (direct lighting) here.
-  // Note that because of that, the albedo affects the path throughput only.
-  // This material is not returning any radiance because it's not a light source.
+    LightSample lightSample; // Sample one of many lights.
+
+    // The caller picks the light to sample. Make sure the index stays in the bounds of the sysLightDefinitions array.
+    lightSample.index = optix::clamp(static_cast<int>(floorf(rng(thePrd.seed) * sysNumLights)), 0, sysNumLights - 1);
+
+    const LightType lightType = sysLightDefinitions[lightSample.index].type;
+
+    sysSampleLight[lightType](thePrd.pos, sample, lightSample); // lightSample direction and distance returned in world space!
+
+    if (0.0f < lightSample.pdf) // Useful light sample?
+    {
+      // Lambert evaluation
+      // Evaluate the Lambert BSDF in the light sample direction. Normally cheaper than shooting rays.
+      const float3 f   = parameters.albedo * M_1_PIf;
+      const float  pdf = fmaxf(0.0f, optix::dot(lightSample.direction, normal) * M_1_PIf);
+
+      if (0.0f < pdf && isNotNull(f))
+      {
+        // Do the visibility check of the light sample.
+        PerRayData_shadow prdShadow;
+
+        prdShadow.visible = true; // Initialize for miss.
+
+        // Note that the sysSceneEpsilon is applied on both sides of the shadow ray [t_min, t_max] interval
+        // to prevent self intersections with the actual light geometry in the scene!
+        optix::Ray ray = optix::make_Ray(thePrd.pos, lightSample.direction, 1, sysSceneEpsilon, lightSample.distance - sysSceneEpsilon); // Shadow ray.
+        rtTrace(sysTopObject, ray, prdShadow);
+
+        if (prdShadow.visible)
+        {
+          const float misWeight = powerHeuristic(lightSample.pdf, pdf);
+
+          thePrd.radiance += f * lightSample.emission * (misWeight * optix::dot(lightSample.direction, normal) / lightSample.pdf);
+        }
+      }
+    }
+  }
+#endif // USE_NEXT_EVENT_ESTIMATION
 }

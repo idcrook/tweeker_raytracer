@@ -42,29 +42,29 @@
 
 // 0 == Brute force path tracing without next event estimation (direct lighting). // Debug setting to compare lighting results.
 // 1 == Next event estimation per path vertex (direct lighting) and using MIS with power heuristic. // Default.
-//#define USE_NEXT_EVENT_ESTIMATION 1
-#define USE_NEXT_EVENT_ESTIMATION 0
+#define USE_NEXT_EVENT_ESTIMATION 1
+//#define USE_NEXT_EVENT_ESTIMATION 0
 
-// 0 == Do not compile in anything which is related to the built-in OptiX 5.1.0 DL Denoiser.
-// 1 == Compile in all code which is needed to run the DL Denoiser.
-//      This needs a lot of additional graphics memory by default. Search for "maxmem" to find how to limit that.
-//#define USE_DENOISER 1
-#define USE_DENOISER 0
+// // 0 == Do not compile in anything which is related to the built-in OptiX 5.1.0 DL Denoiser.
+// // 1 == Compile in all code which is needed to run the DL Denoiser.
+// //      This needs a lot of additional graphics memory by default. Search for "maxmem" to find how to limit that.
+// //#define USE_DENOISER 1
+// #define USE_DENOISER 0
 
-// 0 == Disable all code which creates and fills the albedo and the normal buffers.
-// 1 == Enable all code which creates, fills, and uses the albedo buffer.
-//#define USE_DENOISER_ALBEDO 1
-#define USE_DENOISER_ALBEDO 0
+// // 0 == Disable all code which creates and fills the albedo and the normal buffers.
+// // 1 == Enable all code which creates, fills, and uses the albedo buffer.
+// //#define USE_DENOISER_ALBEDO 1
+// #define USE_DENOISER_ALBEDO 0
 
-// 0 == Disable all code which creates and fills the normal buffer. (Only possible when also using the albedo buffer.)
-//      NOTE: 0 is the default because the normal buffer in OptiX 5.1.0 is ignored!
-// 1 == Enable all code which creates, fills, and uses the normal buffer.
-//      Don't use! Just for demonstration how to generate the normals in camera space.
-#define USE_DENOISER_NORMAL 0
+// // 0 == Disable all code which creates and fills the normal buffer. (Only possible when also using the albedo buffer.)
+// //      NOTE: 0 is the default because the normal buffer in OptiX 5.1.0 is ignored!
+// // 1 == Enable all code which creates, fills, and uses the normal buffer.
+// //      Don't use! Just for demonstration how to generate the normals in camera space.
+// #define USE_DENOISER_NORMAL 0
 
 // 0 == Disable all OptiX exceptions, rtPrintfs and rtAssert functionality. (Benchmark only in this mode!)
 // 1 == Enable  all OptiX exceptions, rtPrintfs and rtAssert functionality. (Really only for debugging, big performance hit!)
-//#define USE_DEBUG_EXCEPTIONS 0
-#define USE_DEBUG_EXCEPTIONS 1
+#define USE_DEBUG_EXCEPTIONS 0
+//#define USE_DEBUG_EXCEPTIONS 1
 
 #endif // APP_CONFIG_CUH

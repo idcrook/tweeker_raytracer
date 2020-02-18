@@ -29,40 +29,14 @@
 #include "app_config.cuh"
 
 #include <optix.h>
-#include <optixu/optixu_math_namespace.h>
 
-#include "rt_function.cuh"
 #include "per_ray_data.cuh"
-#include "light_definition.cuh"
-#include "shader_common.cuh"
 
-rtDeclareVariable(optix::Ray, theRay, rtCurrentRay, );
+rtDeclareVariable(PerRayData_shadow, thePrdShadow, rtPayload, );
 
-rtDeclareVariable(PerRayData, thePrd, rtPayload, );
-
-rtBuffer<LightDefinition> sysLightDefinitions;
-
-rtDeclareVariable(float, sysEnvironmentRotation, , );
-
-
-// Not actually a light. Never appears inside the sysLightDefinitions.
-RT_PROGRAM void miss_environment_null()
+// The shadow ray program for all materials with no cutout opacity.
+RT_PROGRAM void anyhit_shadow()
 {
-  thePrd.radiance = make_float3(0.0f);
-
-  thePrd.flags |= FLAG_TERMINATE;
-}
-
-RT_PROGRAM void miss_environment_constant()
-{
-#if USE_NEXT_EVENT_ESTIMATION
-  // If the last surface intersection was a diffuse which was directly lit with multiple importance sampling,
-  // then calculate light emission with multiple importance sampling as well.
-  const float weightMIS = (thePrd.flags & FLAG_DIFFUSE) ? powerHeuristic(thePrd.pdf, 0.25f * M_1_PIf) : 1.0f;
-  thePrd.radiance = make_float3(weightMIS); // Constant white emission multiplied by MIS weight.
-#else
-  thePrd.radiance = make_float3(1.0f); // Constant white emission.
-#endif
-
-  thePrd.flags |= FLAG_TERMINATE;
+  thePrdShadow.visible = false;
+  rtTerminateRay();
 }

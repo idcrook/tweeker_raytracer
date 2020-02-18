@@ -58,14 +58,17 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
 
   float3 throughput = make_float3(1.0f); // The throughput for the next radiance, starts with 1.0f.
 
+  // Russian Roulette path termination after a specified number of bounces needs the current depth.
   int depth = 0; // Path segment index. Primary ray is 0.
+
+  prd.flags = 0;
 
   while (depth < sysPathLengths.y)
   {
-    prd.wo    = -prd.wi; // wi is the next path segment ray.direction. wo is the direction to the observer.
-    prd.flags = 0;       // Clear all non-persistent flags. None in this version.
+    prd.wo        = -prd.wi;           // Direction to observer.
+    prd.flags    &= FLAG_CLEAR_MASK;   // Clear all non-persistent flags. In this demo only the last diffuse surface interaction stays.
 
-    // Note that the primary rays wouldn't need to offset the ray t_min by sysSceneEpsilon.
+    // Note that the primary rays wouldn't offset the ray t_min by sysSceneEpsilon.
     optix::Ray ray = optix::make_Ray(prd.pos, prd.wi, 0, sysSceneEpsilon, RT_DEFAULT_MAX);
     rtTrace(sysTopObject, ray, prd);
 
@@ -81,7 +84,16 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
     // PERF f_over_pdf already contains the proper throughput adjustment for diffuse materials: f * (fabsf(optix::dot(prd.wi, state.normal)) / prd.pdf);
     throughput *= prd.f_over_pdf;
 
-    // Russian Roulette path termination after a specified number of bounces in sysPathLengths.x would go here. See next examples.
+    // Unbiased Russian Roulette path termination.
+    if (sysPathLengths.x <= depth) // Start termination after a minimum number of bounces.
+    {
+      const float probability = fmaxf(throughput); // DAR Other options: // intensity(throughput); // fminf(0.5f, intensity(throughput));
+      if (probability < rng(prd.seed)) // Paths with lower probability to continue are terminated earlier.
+      {
+        break;
+      }
+      throughput /= probability; // Path isn't terminated. Adjust the throughput so that the average is right again.
+    }
 
     ++depth; // Next path segment.
   }

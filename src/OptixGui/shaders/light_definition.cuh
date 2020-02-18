@@ -26,43 +26,49 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#pragma once
+
+#ifndef LIGHT_DEFINITION_CUH
+#define LIGHT_DEFINITION_CUH
+
 #include "app_config.cuh"
 
 #include <optix.h>
 #include <optixu/optixu_math_namespace.h>
+#include <optixu/optixu_matrix_namespace.h>
 
-#include "rt_function.cuh"
-#include "per_ray_data.cuh"
-#include "light_definition.cuh"
-#include "shader_common.cuh"
-
-rtDeclareVariable(optix::Ray, theRay, rtCurrentRay, );
-
-rtDeclareVariable(PerRayData, thePrd, rtPayload, );
-
-rtBuffer<LightDefinition> sysLightDefinitions;
-
-rtDeclareVariable(float, sysEnvironmentRotation, , );
-
-
-// Not actually a light. Never appears inside the sysLightDefinitions.
-RT_PROGRAM void miss_environment_null()
+enum LightType
 {
-  thePrd.radiance = make_float3(0.0f);
+  LIGHT_ENVIRONMENT   = 0, // Constant white environment.
+  LIGHT_PARALLELOGRAM = 1  // Parallelogram area light.
+};
 
-  thePrd.flags |= FLAG_TERMINATE;
-}
-
-RT_PROGRAM void miss_environment_constant()
+struct LightDefinition
 {
-#if USE_NEXT_EVENT_ESTIMATION
-  // If the last surface intersection was a diffuse which was directly lit with multiple importance sampling,
-  // then calculate light emission with multiple importance sampling as well.
-  const float weightMIS = (thePrd.flags & FLAG_DIFFUSE) ? powerHeuristic(thePrd.pdf, 0.25f * M_1_PIf) : 1.0f;
-  thePrd.radiance = make_float3(weightMIS); // Constant white emission multiplied by MIS weight.
-#else
-  thePrd.radiance = make_float3(1.0f); // Constant white emission.
-#endif
+  LightType     type; // constant, environment, rectangle (parallelogram)
+  // Rectangle lights are defined in world coordinates as footpoint and two vectors spanning a parallelogram.
+  // All in world coordinates with no scaling.
+  optix::float3 position;
+  optix::float3 vecU;
+  optix::float3 vecV;
+  optix::float3 normal;
+  float         area;
+  optix::float3 emission;
 
-  thePrd.flags |= FLAG_TERMINATE;
-}
+  // Manual padding to float4 alignment goes here.
+  float         unused0;
+  float         unused1;
+  float         unused2;
+};
+
+struct LightSample
+{
+  optix::float3 position;
+  int           index;
+  optix::float3 direction;
+  float         distance;
+  optix::float3 emission;
+  float         pdf;
+};
+
+#endif // LIGHT_DEFINITION_CUH

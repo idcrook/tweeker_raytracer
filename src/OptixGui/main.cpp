@@ -36,6 +36,10 @@
 #define GUI_WINDOW_DEFAULT_STARTING_Nx  (1280)
 #define GUI_WINDOW_DEFAULT_STARTING_Ny  ( 720)
 
+#define NOptix_Stack_Size_DEFAULT       (1024)
+#define NMiss_Shader_DEFAULT            (1)
+#define NMiss_Shader_MAX                (1)    // Range [0 .. NMiss_Shader_MAX]
+
 static Application* g_app = nullptr;
 
 // static bool displayGUI = true; // unimplemented currently
@@ -55,23 +59,22 @@ App Options:
 
 )";
   std::cerr <<
-    "  -s | --scene <int>   Scene selection number, N: 0, 1, (max: " << Nscene_MAX << ')' << std::endl <<
+    "TBD  -s | --scene <int>   Scene selection number, N: 0, 1, (max: " << Nscene_MAX << ')' << std::endl <<
     "  -x | -dx <int>       Output image width, x dimension (default: "  << Nx_DEFAULT << ')' << std::endl <<
     "  -y | -dy <int>       Output image height, y dimension (default: " << Ny_DEFAULT << ')' << std::endl <<
     "  -p | -ns <int>       Sample each pixel N times, N: 1, (max: " << Nsamples_MAX << ')' << std::endl <<
     std::endl <<
     "  -w | --width <int>   GUI Window client width.  (default: "     << GUI_WINDOW_DEFAULT_STARTING_Nx << ')' << std::endl <<
-    "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' <<
-    std::endl;
+    "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' << std::endl <<
+    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."  << std::endl <<
+    "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
+    "  -l | --light         Add an area light to the scene. "                  << std::endl <<
+    "  -m | --miss  <0|1>   Select the miss shader (0 = black, 1 = white). (default: "   << NMiss_Shader_DEFAULT << ')' << std::endl <<
+    "  -k | --stack <int>   Set the OptiX stack size (1024) (debug feature). (default: " << NOptix_Stack_Size_DEFAULT << ')' << std::endl <<
+    "";
 
   std::cerr << R"(
   -f | --file <filename> Save image to file and exit.
-
-TBD  -n | --nopbo           Disable OpenGL interop for the image display.
-TBD  -l | --light           Add an area light to the scene.
-TBD  -m | --miss  <0|1>     Select the miss shader (0 = black, 1 = white).
-TBD  -k | --stack <int>     Set the OptiX stack size (1024) (debug feature).
-
 )";
 
 
@@ -100,10 +103,10 @@ int main(int argc, char* argv[])
   int windowHeight = GUI_WINDOW_DEFAULT_STARTING_Ny;
   int  devices      = 3210;  // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
   bool interop      = true;  // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
-  int  stackSize    = 1024;  // Command line parameter just to be able to find the smallest working size.
+  bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
+  int  miss         = NMiss_Shader_DEFAULT; // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
+  int  stackSize    = NOptix_Stack_Size_DEFAULT ;  // Command line parameter just to be able to find the smallest working size.
   //std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
-  // bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
-  // int  miss         = 1;     // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
 
   std::string filenameScreenshot;
   bool hasGUI = true;
@@ -128,13 +131,25 @@ int main(int argc, char* argv[])
   Qdebug = cl_input.cmdEquivalentsExist(sameOptionList);
 
   sameOptionList.clear();
+  sameOptionList.push_back("-n"); sameOptionList.push_back("--nopbo");
+  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
+    interop = false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-l"); sameOptionList.push_back("--light");
+  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
+    light = true;
+  }
+
+  sameOptionList.clear();
   sameOptionList.push_back("-s");  sameOptionList.push_back("--scene");
   const std::string &sceneNumber = cl_input.getCmdEquivalentsOption(sameOptionList);
   try {
     if (!sceneNumber.empty()){
       std::size_t pos;
       int x = std::stoi(sceneNumber, &pos);
-      if (x >= Nscene and x <= Nscene_MAX) {
+      if (x >= 0 and x <= Nscene_MAX) {
         Nscene = x;
       } else {
         std::cerr << "WARNING: Scene number " << x << " out of range. Maximum scene number: " << Nscene_MAX << std::endl;
@@ -257,6 +272,57 @@ int main(int argc, char* argv[])
   }
 
   sameOptionList.clear();
+  sameOptionList.push_back("-d");  sameOptionList.push_back("--device");
+  const std::string &deviceString =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!deviceString.empty()){
+      std::size_t pos;
+      int x = std::stoi(deviceString, &pos);
+      devices = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid stack size (--stack): " << deviceString << std::endl;
+    std::exit ( EXIT_FAILURE );
+  }
+
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-k");  sameOptionList.push_back("--stack");
+  const std::string &stackSizeString =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!stackSizeString.empty()){
+      std::size_t pos;
+      int x = std::stoi(stackSizeString, &pos);
+      stackSize = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid stack size (--stack): " << stackSizeString << std::endl;
+    std::exit ( EXIT_FAILURE );
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-m");  sameOptionList.push_back("--miss");
+  const std::string &missShader = cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!missShader.empty()){
+      std::size_t pos;
+      int x = std::stoi(missShader, &pos);
+      if (x >= 0 and x <= NMiss_Shader_MAX) {
+        miss = x;
+      } else {
+        std::cerr << "WARNING: Miss shader number " << x << " out of range. Maximum: " << NMiss_Shader_MAX << std::endl;
+        std::cerr << "WARNING: Using miss shader " << miss << std::endl;
+      }
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid miss shader number: " << missShader << std::endl;
+    std::exit ( EXIT_FAILURE );
+  }
+
+  sameOptionList.clear();
   sameOptionList.push_back("-f");  sameOptionList.push_back("--file");
   const std::string &outputImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
   try {
@@ -366,7 +432,7 @@ int main(int argc, char* argv[])
   //                         devices, stackSize, interop, light, miss, environment);
 
   g_app = new Application(window, windowWidth, windowHeight,
-                          devices, stackSize, interop);
+                          devices, stackSize, interop, light, miss);
 
   if (!g_app->isValid())
   {

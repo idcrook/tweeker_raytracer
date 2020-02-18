@@ -171,7 +171,7 @@ optix::Geometry Application::createBox()
 
   for (unsigned int i = 0; i < 6; ++i) // Six faces (== 12 triangles).
   {
-    const unsigned int idx = i * 4; // Four unique attributes per box face.
+    const unsigned int idx = i * 4; // Four attributes per box face.
 
     indices.push_back(idx    );
     indices.push_back(idx + 1);
