@@ -37,40 +37,69 @@
 
 #include "rt_assert.cuh"
 
-rtBuffer<float4,  2> sysOutputBuffer; // RGBA32F
+rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
 
 rtDeclareVariable(rtObject, sysTopObject, , );
 rtDeclareVariable(float,    sysSceneEpsilon, , );
 rtDeclareVariable(int2,     sysPathLengths, , );
 rtDeclareVariable(int,      sysIterationIndex, , );
+rtDeclareVariable(int,      sysCameraType, , );
 
-rtDeclareVariable(float3, sysCameraPosition, , );
-rtDeclareVariable(float3, sysCameraU, , );
-rtDeclareVariable(float3, sysCameraV, , );
-rtDeclareVariable(float3, sysCameraW, , );
+// Bindless callable programs implementing different lens shaders.
+rtBuffer< rtCallableProgramId<void(const float2 pixel, const float2 screen, const float2 sample, float3& origin, float3& direction)> > sysLensShader;
 
 rtDeclareVariable(uint2, theLaunchDim,   rtLaunchDim, );
 rtDeclareVariable(uint2, theLaunchIndex, rtLaunchIndex, );
 
 RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
 {
+  // This renderer supports nested volumes. Four levels is plenty enough for most cases.
+  // The absorption coefficient and IOR of the volume the ray is currently inside.
+  float4 absorptionStack[MATERIAL_STACK_SIZE]; // .xyz == absorptionCoefficient (sigma_a), .w == index of refraction
+
   radiance = make_float3(0.0f); // Start with black.
 
   float3 throughput = make_float3(1.0f); // The throughput for the next radiance, starts with 1.0f.
 
-  // Russian Roulette path termination after a specified number of bounces needs the current depth.
-  int depth = 0; // Path segment index. Primary ray is 0.
+  int stackIdx = MATERIAL_STACK_EMPTY; // Start with empty nested materials stack.
+  int depth = 0;                       // Path segment index. Primary ray is 0.
+
+  prd.absorption_ior = make_float4(0.0f, 0.0f, 0.0f, 1.0f); // Assume primary ray starts in vacuum.
 
   prd.flags = 0;
 
+  // Russian Roulette path termination after a specified number of bounces needs the current depth.
   while (depth < sysPathLengths.y)
   {
     prd.wo        = -prd.wi;           // Direction to observer.
+    prd.ior       = make_float2(1.0f); // Reset the volume IORs.
+    prd.distance  = RT_DEFAULT_MAX;    // Shoot the next ray with maximum length.
     prd.flags    &= FLAG_CLEAR_MASK;   // Clear all non-persistent flags. In this demo only the last diffuse surface interaction stays.
 
-    // Note that the primary rays wouldn't offset the ray t_min by sysSceneEpsilon.
-    optix::Ray ray = optix::make_Ray(prd.pos, prd.wi, 0, sysSceneEpsilon, RT_DEFAULT_MAX);
+    // Handle volume absorption of nested materials.
+    if (MATERIAL_STACK_FIRST <= stackIdx) // Inside a volume?
+    {
+      prd.flags     |= FLAG_VOLUME;                            // Indicate that we're inside a volume. => At least absorption calculation needs to happen.
+      prd.extinction = make_float3(absorptionStack[stackIdx]); // There is only volume absorption in this demo, no volume scattering.
+      prd.ior.x      = absorptionStack[stackIdx].w;            // The IOR of the volume we're inside. Needed for eta calculations in transparent materials.
+      if (MATERIAL_STACK_FIRST <= stackIdx - 1)
+      {
+        prd.ior.y = absorptionStack[stackIdx - 1].w; // The IOR of the surrounding volume. Needed when potentially leaving a volume to calculate eta in transparent materials.
+      }
+    }
+
+    // Note that the primary rays (or volume scattering miss cases) wouldn't noramlly offset the ray t_min by sysSceneEpsilon. Keep it simple here.
+    optix::Ray ray = optix::make_Ray(prd.pos, prd.wi, 0, sysSceneEpsilon, prd.distance);
     rtTrace(sysTopObject, ray, prd);
+
+    // This renderer supports nested volumes.
+    if (prd.flags & FLAG_VOLUME)
+    {
+      // We're inside a volume. Calculate the extinction along the current path segment in any case.
+      // The transmittance along the current path segment inside a volume needs to attenuate the ray throughput with the extinction
+      // before it modulates the radiance of the hitpoint.
+      throughput *= expf(-prd.distance * prd.extinction);
+    }
 
     radiance += throughput * prd.radiance;
 
@@ -95,11 +124,31 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
       throughput /= probability; // Path isn't terminated. Adjust the throughput so that the average is right again.
     }
 
+    // Adjust the material volume stack if the geometry is not thin-walled but a border between two volumes
+    // and the outgoing ray direction was a transmission.
+    if ((prd.flags & (FLAG_THINWALLED | FLAG_TRANSMISSION)) == FLAG_TRANSMISSION)
+    {
+      // Transmission.
+      if (prd.flags & FLAG_FRONTFACE) // Entered a new volume?
+      {
+        // Push the entered material's volume properties onto the volume stack.
+        //rtAssert((stackIdx < MATERIAL_STACK_LAST), 1); // Overflow?
+        stackIdx = min(stackIdx + 1, MATERIAL_STACK_LAST);
+        absorptionStack[stackIdx] = prd.absorption_ior;
+      }
+      else // Exited the current volume?
+      {
+        // Pop the top of stack material volume.
+        // This assert fires and is intended because I tuned the frontface checks so that there are more exits than enters at silhouettes.
+        //rtAssert((MATERIAL_STACK_EMPTY < stackIdx), 0); // Underflow?
+        stackIdx = max(stackIdx - 1, MATERIAL_STACK_EMPTY);
+      }
+    }
+
     ++depth; // Next path segment.
   }
 }
 
-// Entry point for pinhole camera with manual accumulation, non-VCA.
 RT_PROGRAM void raygeneration()
 {
   PerRayData prd;
@@ -107,21 +156,9 @@ RT_PROGRAM void raygeneration()
   // Initialize the random number generator seed from the linear pixel index and the iteration index.
   prd.seed = tea<8>(theLaunchIndex.y * theLaunchDim.x + theLaunchIndex.x, sysIterationIndex);
 
-  // Pinhole camera implementation:
-  // The launch index is the pixel coordinate.
-  // Note that launchIndex = (0, 0) is the bottom left corner of the image,
-  // which matches the origin in the OpenGL texture used to display the result.
-  const float2 pixel = make_float2(theLaunchIndex);
-  // Sample the ray in the center of the pixel.
-  const float2 fragment = pixel + rng2(prd.seed); // Random jitter of the fragment location in this pixel.
-  // The launch dimension (set with rtContextLaunch) is the full client window in this demo's setup.
-  const float2 screen = make_float2(theLaunchDim);
-  // Normalized device coordinates in range [-1, 1].
-  const float2 ndc = (fragment / screen) * 2.0f - 1.0f;
-
-  // The integrator expects the next path segments ray.origin in prd.pos and the next ray.direction in prd.wi.
-  prd.pos = sysCameraPosition;
-  prd.wi  = optix::normalize(ndc.x * sysCameraU + ndc.y * sysCameraV + sysCameraW);
+  // DAR Decoupling the pixel coordinates from the screen size will allow for partial rendering algorithms.
+  // In this case theLaunchIndex is the pixel coordinate and theLaunchDim is sysOutputBuffer.size().
+  sysLensShader[sysCameraType](make_float2(theLaunchIndex), make_float2(theLaunchDim), rng2(prd.seed), prd.pos, prd.wi); // Calculate the primary ray with a lens shader program.
 
   float3 radiance;
 

@@ -28,25 +28,15 @@
 
 #pragma once
 
-#ifndef MATERIAL_PARAMETER_CUH
-#define MATERIAL_PARAMETER_CUH
+#ifndef FUNCTION_INDICES_CUH
+#define FUNCTION_INDICES_CUH
 
-#include "function_indices.cuh"
-
-// Just some hardcoded material parameter system which allows to show a few fundamental BSDFs.
-// Alignment of all data types used here is 4 bytes.
-struct MaterialParameter
+enum FunctionIndex
 {
-  FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
-  optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
-  optix::float3 absorption; // Absorption coefficient
-  float         ior;        // Index of refraction
-  unsigned int  flags;      // Thin-walled on/off
-
-  // Manual padding to 16-byte alignment goes here.
-  float unused0;
-  float unused1;
-  float unused2;
+  INDEX_BSDF_DIFFUSE_REFLECTION               = 0,
+  INDEX_BSDF_SPECULAR_REFLECTION              = 1,
+  INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION = 2,
+  NUMBER_OF_BSDF_INDICES                      = 3
 };
 
-#endif // MATERIAL_PARAMETER_CUH
+#endif // FUNCTION_INDICES_CUH

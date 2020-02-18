@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (c) 2013-2018, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,25 +28,14 @@
 
 #pragma once
 
-#ifndef MATERIAL_PARAMETER_CUH
-#define MATERIAL_PARAMETER_CUH
+#ifndef LENS_SHADER_H
+#define LENS_SHADER_H
 
-#include "function_indices.cuh"
-
-// Just some hardcoded material parameter system which allows to show a few fundamental BSDFs.
-// Alignment of all data types used here is 4 bytes.
-struct MaterialParameter
+enum LensShader
 {
-  FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
-  optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
-  optix::float3 absorption; // Absorption coefficient
-  float         ior;        // Index of refraction
-  unsigned int  flags;      // Thin-walled on/off
-
-  // Manual padding to 16-byte alignment goes here.
-  float unused0;
-  float unused1;
-  float unused2;
+  LENS_SHADER_PINHOLE  = 0,
+  LENS_SHADER_FISHEYE  = 1,
+  LENS_SHADER_SPHERE   = 2
 };
 
-#endif // MATERIAL_PARAMETER_CUH
+#endif // LENS_SHADER_H

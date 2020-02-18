@@ -47,6 +47,9 @@
 
 #include "include/MyAssert.h"
 
+// DAR HACK Taken from per_ray_data.h. I don't need any of the rest of it in this source.
+#define FLAG_THINWALLED 0x00000020
+
 const char* const SAMPLE_NAME = "optixGui";
 
 static std::string ptxPath(std::string const& cuda_file)
@@ -156,7 +159,7 @@ Application::Application(GLFWwindow* window,
 
   // Renderer setup and GUI parameters.
   m_minPathLength       = 2;    // Minimum path length after which Russian Roulette path termination starts.
-  m_maxPathLength       = 6;    // Maximum path length. (Need at least 6 path segments to go through a glass sphere, hit something, and back through that sphere to the viewer.)
+  m_maxPathLength       = 10;   // Maximum path length. Crank it up a little to show nested materials.
   m_sceneEpsilonFactor  = 500;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
 
   m_present         = false;  // Update once per second. (The first half second shows all frames to get some initial accumulation).
@@ -164,6 +167,8 @@ Application::Application(GLFWwindow* window,
   m_presentAtSecond = 1.0;
 
   m_builder = std::string("Trbvh");
+
+  m_cameraType = LENS_SHADER_PINHOLE;
 
   m_frames = 0; // Samples per pixel. 0 == render forever.
 
@@ -496,6 +501,8 @@ void Application::initRenderer()
     m_context["sysCameraV"]->setFloat(0.0f, 1.0f, 0.0f);
     m_context["sysCameraW"]->setFloat(0.0f, 0.0f, -1.0f);
 
+    // Lens shader selection.
+    m_context["sysCameraType"]->setInt(m_cameraType);
   }
   catch(optix::Exception& e)
   {
@@ -830,6 +837,11 @@ void Application::guiWindow()
     {
       // No action needed, happens automatically.
     }
+    if (ImGui::Combo("Camera", (int*) &m_cameraType, "Pinhole\0Fisheye\0Spherical\0\0"))
+    {
+      m_context["sysCameraType"]->setInt(m_cameraType);
+      restartAccumulation();
+    }
     if (ImGui::DragInt("Min Paths", &m_minPathLength, 1.0f, 0, 100))
     {
       m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
@@ -912,9 +924,34 @@ void Application::guiWindow()
       {
         MaterialParameterGUI& parameters = m_guiMaterialParameters[i];
 
+        if (ImGui::Combo("BSDF Type", (int*) &parameters.indexBSDF,
+                         "Diffuse Reflection\0Specular Reflection\0Specular Reflection Transmission\0\0"))
+        {
+          changed = true;
+        }
         if (ImGui::ColorEdit3("Albedo", (float*) &parameters.albedo))
         {
           changed = true;
+        }
+        // Only show material parameters for the BSDFs which are affected.
+        if (parameters.indexBSDF == INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION)
+        {
+          if (ImGui::Checkbox("Thin-Walled", &parameters.thinwalled))
+          {
+            changed = true;
+          }
+          if (ImGui::ColorEdit3("Absorption", (float*) &parameters.absorptionColor))
+          {
+            changed = true;
+          }
+          if (ImGui::DragFloat("Volume Scale", &parameters.volumeDistanceScale, 0.01f, 0.0f, 100.0f, "%.2f"))
+          {
+            changed = true;
+          }
+          if (ImGui::DragFloat("IOR", &parameters.ior, 0.01f, 0.0f, 10.0f, "%.2f"))
+          {
+            changed = true;
+          }
         }
         ImGui::TreePop();
       }
@@ -926,7 +963,6 @@ void Application::guiWindow()
       restartAccumulation();
     }
   }
-
   if (ImGui::CollapsingHeader("Lights"))
   {
     bool changed = false;
@@ -959,7 +995,6 @@ void Application::guiWindow()
     }
   }
 
-
   ImGui::PopItemWidth();
 
   ImGui::End();
@@ -975,12 +1010,6 @@ void Application::guiEventHandler()
 
   }
 
-  // if (ImGui::IsKeyPressed('q', false)) // DOES NOT WORK - Quit app with 'q' key
-  // {
-  //   glfwSetWindowShouldClose(m_window, 1);
-  // }
-
-
   const ImVec2 mousePosition = ImGui::GetMousePos(); // Mouse coordinate window client rect.
   const int x = int(mousePosition.x);
   const int y = int(mousePosition.y);
@@ -988,7 +1017,7 @@ void Application::guiEventHandler()
   switch (m_guiState)  // GUI_STATE_FOCUS is not handled
   {
     case GUI_STATE_NONE:
-      if (!io.WantCaptureMouse) // Only allow camera interactions to begin when not interacting with the GUI.
+      if (!io.WantCaptureMouse) // Only allow camera interactions to begin when interacting with the GUI.
       {
         if (ImGui::IsMouseDown(0)) // LMB down event?
         {
@@ -1091,7 +1120,6 @@ optix::Geometry Application::createGeometry(std::vector<VertexAttributes> const&
 
 void Application::initPrograms()
 {
-  std::cerr << "DEBUG: MissID " << m_missID << std::endl;
   try
   {
     // First load all programs and put them into a map.
@@ -1119,14 +1147,75 @@ void Application::initPrograms()
     m_mapOfPrograms["intersection_triangle_indexed"] = m_context->createProgramFromPTXFile(ptxPath("intersection_triangle_indexed.cu"), "intersection_triangle_indexed");
 
     // Material programs. There are only two Material nodes, opaque and rectangle lights.
-    // For the radiance ray type 0
+    // For the radiance ray type 0:
     m_mapOfPrograms["closesthit"] = m_context->createProgramFromPTXFile(ptxPath("closesthit.cu"), "closesthit");
     m_mapOfPrograms["closesthit_light"] = m_context->createProgramFromPTXFile(ptxPath("closesthit_light.cu"), "closesthit_light");
     // For the shadow ray type 1:
     m_mapOfPrograms["anyhit_shadow"]    = m_context->createProgramFromPTXFile(ptxPath("anyhit.cu"), "anyhit_shadow");        // Opaque
 
+    // Now setup all buffers of bindless callable program IDs.
+    // These are device side function tables which can be indexed at runtime without recompilation.
+
+    // Different lens shader implementations as bindless callable program IDs inside "sysLensShader".
+    m_bufferLensShader = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_PROGRAM_ID, 3);
+    int* lensShader = (int*) m_bufferLensShader->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+
+    const std::string ptxPathLensShader = ptxPath("lens_shader.cu");
+    optix::Program prg = m_context->createProgramFromPTXFile(ptxPathLensShader, "lens_shader_pinhole");
+    m_mapOfPrograms["lens_shader_pinhole"] = prg;
+    lensShader[LENS_SHADER_PINHOLE] = prg->getId();
+
+    prg = m_context->createProgramFromPTXFile(ptxPathLensShader, "lens_shader_fisheye");
+    m_mapOfPrograms["lens_shader_fisheye"] = prg;
+    lensShader[LENS_SHADER_FISHEYE] = prg->getId();
+
+    prg = m_context->createProgramFromPTXFile(ptxPathLensShader, "lens_shader_sphere");
+    m_mapOfPrograms["lens_shader_sphere"] = prg;
+    lensShader[LENS_SHADER_SPHERE] = prg->getId();
+
+    m_bufferLensShader->unmap();
+
+    m_context["sysLensShader"]->setBuffer(m_bufferLensShader);
+
     // PERF One possible optimization to reduce the OptiX kernel size even more
     // is to only download the programs for materials actually present in the scene. Not done in this demo.
+    // BSDF sampling functions.
+    m_bufferSampleBSDF = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_PROGRAM_ID, NUMBER_OF_BSDF_INDICES);
+    int* sampleBsdf = (int*) m_bufferSampleBSDF->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+
+    prg = m_context->createProgramFromPTXFile(ptxPath("bsdf_diffuse_reflection.cu"), "sample_bsdf_diffuse_reflection");
+    m_mapOfPrograms["sample_bsdf_diffuse_reflection"] = prg;
+    sampleBsdf[INDEX_BSDF_DIFFUSE_REFLECTION] = prg->getId();
+
+    prg = m_context->createProgramFromPTXFile(ptxPath("bsdf_specular_reflection.cu"), "sample_bsdf_specular_reflection");
+    m_mapOfPrograms["sample_bsdf_specular_reflection"] = prg;
+    sampleBsdf[INDEX_BSDF_SPECULAR_REFLECTION] = prg->getId();
+
+    prg = m_context->createProgramFromPTXFile(ptxPath("bsdf_specular_reflection_transmission.cu"), "sample_bsdf_specular_reflection_transmission");
+    m_mapOfPrograms["sample_bsdf_specular_reflection_transmission"] = prg;
+    sampleBsdf[INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION] = prg->getId();
+
+    m_bufferSampleBSDF->unmap();
+
+    m_context["sysSampleBSDF"]->setBuffer(m_bufferSampleBSDF);
+
+    // BSDF evaluation functions
+    m_bufferEvalBSDF = m_context->createBuffer(RT_BUFFER_INPUT, RT_FORMAT_PROGRAM_ID, NUMBER_OF_BSDF_INDICES);
+    int* evalBsdf = (int*) m_bufferEvalBSDF->map(0, RT_BUFFER_MAP_WRITE_DISCARD);
+
+    prg = m_context->createProgramFromPTXFile(ptxPath("bsdf_diffuse_reflection.cu"), "eval_bsdf_diffuse_reflection");
+    m_mapOfPrograms["eval_bsdf_diffuse_reflection"] = prg;
+    evalBsdf[INDEX_BSDF_DIFFUSE_REFLECTION] = prg->getId();
+
+    prg = m_context->createProgramFromPTXFile(ptxPath("bsdf_specular_reflection.cu"), "eval_bsdf_specular_reflection");
+    m_mapOfPrograms["eval_bsdf_specular_reflection"] = prg;
+    evalBsdf[INDEX_BSDF_SPECULAR_REFLECTION]              = prg->getId(); // All specular evaluation functions just returns float4(0.0f).
+    evalBsdf[INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION] = prg->getId(); // Reuse the same program for all specular materials to keep the kernel small.
+
+    m_bufferEvalBSDF->unmap();
+
+    m_context["sysEvalBSDF"]->setBuffer(m_bufferEvalBSDF);
+
 
     // Light sampling functions.
     // There are only two light types implemented in this renderer: environment lights and parallelogram area lights.
@@ -1135,8 +1224,6 @@ void Application::initPrograms()
 
     sampleLight[LIGHT_ENVIRONMENT]   = RT_PROGRAM_ID_NULL;
     sampleLight[LIGHT_PARALLELOGRAM] = RT_PROGRAM_ID_NULL;
-
-    optix::Program prg;
 
     switch (m_missID)
     {
@@ -1171,14 +1258,22 @@ void Application::updateMaterialParameters()
   MY_ASSERT((sizeof(MaterialParameter) & 15) == 0); // Verify float4 alignment.
 
   // Convert the GUI material parameters to the device side structure and upload them into the context global buffer.
-  // (Doing this in a loop will make more sense in later examples.)
   MaterialParameter* dst = static_cast<MaterialParameter*>(m_bufferMaterialParameters->map(0, RT_BUFFER_MAP_WRITE_DISCARD));
 
   for (size_t i = 0; i < m_guiMaterialParameters.size(); ++i, ++dst)
   {
     MaterialParameterGUI& src = m_guiMaterialParameters[i];
 
-    dst->albedo = src.albedo;
+    dst->indexBSDF = src.indexBSDF;
+    dst->albedo     = src.albedo;
+    dst->flags      = (src.thinwalled) ? FLAG_THINWALLED : 0;
+    // Calculate the effective absorption coefficient from the GUI parameters. This is one reason why there are two structures.
+    // Prevent logf(0.0f) which results in infinity.
+    const float x = (0.0f < src.absorptionColor.x) ? -logf(src.absorptionColor.x) : RT_DEFAULT_MAX;
+    const float y = (0.0f < src.absorptionColor.y) ? -logf(src.absorptionColor.y) : RT_DEFAULT_MAX;
+    const float z = (0.0f < src.absorptionColor.z) ? -logf(src.absorptionColor.z) : RT_DEFAULT_MAX;
+    dst->absorption = optix::make_float3(x, y, z) * src.volumeDistanceScale;
+    dst->ior = src.ior;
   }
 
   m_bufferMaterialParameters->unmap();
@@ -1189,31 +1284,50 @@ void Application::initMaterials()
   // Setup GUI material parameters, one for each of the objects in the scene.
   MaterialParameterGUI parameters;
 
-  // Use a different color per object to show lighting effects.
-  parameters.albedo = optix::make_float3(0.5f);
-  m_guiMaterialParameters.push_back(parameters); // 0, floor
+  // Lambert material for the floor.
+  parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
+  parameters.albedo              = optix::make_float3(0.25f); // Dark grey.
+  parameters.thinwalled          = true;
+  parameters.absorptionColor     = optix::make_float3(1.0f);
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.5f;
+  m_guiMaterialParameters.push_back(parameters); // 0
 
-  parameters.albedo = optix::make_float3(0.5, 0.0f, 0.0f);
-  m_guiMaterialParameters.push_back(parameters); // 1, box
+  // Glass material for the box.
+  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
+  parameters.albedo              = optix::make_float3(1.0f);
+  parameters.thinwalled          = false;
+  parameters.absorptionColor     = optix::make_float3(0.8f, 0.8f, 0.9f); // Light blue
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.33f; // Water
+  m_guiMaterialParameters.push_back(parameters); // 1
 
-  parameters.albedo = optix::make_float3(0.0f, 0.5f, 0.0f);
-  m_guiMaterialParameters.push_back(parameters); // 2, sphere
+  // Glass material for the sphere inside that box to show nested materials!
+  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
+  parameters.albedo              = optix::make_float3(1.0f);
+  parameters.thinwalled          = false;
+  parameters.absorptionColor     = optix::make_float3(0.6f, 0.9f, 0.6f); // Green.
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.5f; // Glass. Higher IOR than the surrounding box.
+  m_guiMaterialParameters.push_back(parameters); // 2
 
-  parameters.albedo = optix::make_float3(0.0f, 0.0f, 0.5f);
-  m_guiMaterialParameters.push_back(parameters); // 3, torus
+  // Lambert material.
+  parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
+  parameters.albedo              = optix::make_float3(1.0f);
+  parameters.thinwalled          = false;
+  parameters.absorptionColor     = optix::make_float3(0.980392f, 0.729412f, 0.470588f);
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.5f; // Glass.
+  m_guiMaterialParameters.push_back(parameters); // 3
 
-  // // Make all parameters white to show automatic ambient occlusion with a brute force full global illumination path tracer.
-  // parameters.albedo = optix::make_float3(1.0f);
-  // m_guiMaterialParameters.push_back(parameters); // 0, floor
-
-  // parameters.albedo = optix::make_float3(1.0f);
-  // m_guiMaterialParameters.push_back(parameters); // 1, box
-
-  // parameters.albedo = optix::make_float3(1.0f);
-  // m_guiMaterialParameters.push_back(parameters); // 2, sphere
-
-  // parameters.albedo = optix::make_float3(1.0f);
-  // m_guiMaterialParameters.push_back(parameters); // 3, torus
+  // Tinted mirror material
+  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
+  parameters.albedo              = optix::make_float3(0.980392f, 0.729412f, 0.470588f); // optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  parameters.thinwalled          = false;
+  parameters.absorptionColor     = optix::make_float3(0.9f, 0.8f, 0.8f); // Light red.
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.33f; // Water
+  m_guiMaterialParameters.push_back(parameters); // 4
 
   try
   {
@@ -1284,7 +1398,7 @@ void Application::createScene()
     giPlane->setGeometry(geoPlane);
     giPlane->setMaterialCount(1);
     giPlane->setMaterial(0, m_opaqueMaterial);
-    giPlane["parMaterialIndex"]->setInt(0); // This is all! This defines which material parameters in sysMaterialParametrers to use.
+    giPlane["parMaterialIndex"]->setInt(0);
 
     optix::Acceleration accPlane = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accPlane);
@@ -1346,6 +1460,44 @@ void Application::createScene()
     m_rootGroup->setChildCount(count + 1);
     m_rootGroup->setChild(count, trBox);
 
+#if 1 // Show nested materials. Put a smaller glass sphere inside the box.
+
+    // Add a tessellated sphere with 180 longitudes and 90 latitudes, radius 1.0f and fully closed at the upper pole.
+    optix::Geometry geoNested = createSphere(180, 90, 1.0f, M_PIf);
+
+    optix::GeometryInstance giNested = m_context->createGeometryInstance();
+    giNested->setGeometry(geoNested);
+    giNested->setMaterialCount(1);
+    giNested->setMaterial(0, m_opaqueMaterial);
+    giNested["parMaterialIndex"]->setInt(2); // Using parameters in sysMaterialParameters[2].
+
+    optix::Acceleration accNested = m_context->createAcceleration(m_builder);
+    setAccelerationProperties(accNested);
+
+    optix::GeometryGroup ggNested = m_context->createGeometryGroup();
+    ggNested->setAcceleration(accNested);
+    ggNested->setChildCount(1);
+    ggNested->setChild(0, giNested);
+
+    float trafoNested[16] =
+    {
+      0.75f, 0.0f,  0.0f, -2.5f,  // Scale this sphere down and move it into the center of the box.
+      0.0f,  0.75f, 0.0f,  1.25f,
+      0.0f,  0.0f,  0.75f, 0.0f,
+      0.0f,  0.0f,  0.0f,  1.0f
+    };
+    optix::Matrix4x4 matrixNested(trafoNested);
+
+    optix::Transform trNested = m_context->createTransform();
+    trNested->setChild(ggNested);
+    trNested->setMatrix(false, matrixNested.getData(), matrixNested.inverse().getData());
+
+    count = m_rootGroup->getChildCount();
+    m_rootGroup->setChildCount(count + 1);
+    m_rootGroup->setChild(count, trNested);
+
+#endif
+
     // Add a tessellated sphere with 180 longitudes and 90 latitudes, radius 1.0f and fully closed at the upper pole.
     optix::Geometry geoSphere = createSphere(180, 90, 1.0f, M_PIf);
 
@@ -1353,7 +1505,7 @@ void Application::createScene()
     giSphere->setGeometry(geoSphere);
     giSphere->setMaterialCount(1);
     giSphere->setMaterial(0, m_opaqueMaterial);
-    giSphere["parMaterialIndex"]->setInt(2); // Using parameters in sysMaterialParameters[2].
+    giSphere["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[3].
 
     optix::Acceleration accSphere = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accSphere);
@@ -1387,7 +1539,7 @@ void Application::createScene()
     giTorus->setGeometry(geoTorus);
     giTorus->setMaterialCount(1);
     giTorus->setMaterial(0, m_opaqueMaterial);
-    giTorus["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[3].
+    giTorus["parMaterialIndex"]->setInt(4); // Using parameters in sysMaterialParameters[4].
 
     optix::Acceleration accTorus = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accTorus);

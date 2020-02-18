@@ -60,8 +60,9 @@ rtDeclareVariable(int,    parLightIndex, , );  // Index into the sysLightDefinit
 RT_PROGRAM void closesthit_light()
 {
   thePrd.pos      = theRay.origin + theRay.direction * theIntersectionDistance; // Advance the path to the hit position in world coordinates.
+  thePrd.distance = theIntersectionDistance; // Return the current path segment distance, needed for absorption calculations in the integrator.
 
-  const float3 geoNormal = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varGeoNormal)); // PERF Not really needed when it's known that light geometry is not under Transforms.
+  const float3 geoNormal = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varGeoNormal)); // PERF Not really needed when it's know that light geometry is not under Transforms.
 
   const float cosTheta = optix::dot(thePrd.wo, geoNormal);
   thePrd.flags |= (0.0f <= cosTheta) ? FLAG_FRONTFACE : 0;
@@ -75,7 +76,7 @@ RT_PROGRAM void closesthit_light()
     thePrd.radiance = light.emission;
 
 #if USE_NEXT_EVENT_ESTIMATION
-    const float pdfLight = (theIntersectionDistance * theIntersectionDistance) / (light.area * cosTheta); // Solid angle pdf. Assumes light.area != 0.0f.
+    const float pdfLight = (thePrd.distance * thePrd.distance) / (light.area * cosTheta); // Solid angle pdf. Assumes light.area != 0.0f.
     // If it's an implicit light hit from a diffuse scattering event and the light emission was not returning a zero pdf.
     if ((thePrd.flags & FLAG_DIFFUSE) && DENOMINATOR_EPSILON < pdfLight)
     {

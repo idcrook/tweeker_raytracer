@@ -35,12 +35,26 @@
 
 #include "random_number_generators.cuh"
 
+#define MATERIAL_STACK_EMPTY -1
+#define MATERIAL_STACK_FIRST  0
+#define MATERIAL_STACK_LAST   3
+#define MATERIAL_STACK_SIZE   4
+
+// Set when reaching a closesthit program. Unused in this demo
+#define FLAG_HIT            0x00000001
 // Set by BSDFs which support direct lighting. Not set means specular interaction. Cleared in the closesthit program.
 // Used to decide when to do direct lighting and multuiple importance sampling on implicit light hits.
 #define FLAG_DIFFUSE        0x00000002
 
 // Set if (0.0f <= wo_dot_ng), means looking onto the front face. (Edge-on is explicitly handled as frontface for the material stack.)
 #define FLAG_FRONTFACE      0x00000010
+// Pass down material.flags through to the BSDFs.
+#define FLAG_THINWALLED     0x00000020
+
+// FLAG_TRANSMISSION is set if there is a transmission. (Can't happen when FLAG_THINWALLED is set.)
+#define FLAG_TRANSMISSION   0x00000100
+// Set if the material stack is not empty.
+#define FLAG_VOLUME         0x00001000
 
 // Highest bit set means terminate path.
 #define FLAG_TERMINATE      0x80000000
@@ -61,7 +75,11 @@ struct State
 // Note that the fields are ordered by CUDA alignment restrictions.
 struct PerRayData
 {
+  optix::float4 absorption_ior; // The absorption coefficient and IOR of the currently hit material.
+  optix::float2 ior;            // .x = IOR the ray currently is inside, .y = the IOR of the surrounding volume. The IOR of the current material is in absorption_ior.w!
+
   optix::float3 pos;            // Current surface hit point or volume sample point, in world space
+  float         distance;       // Distance from the ray origin to the current position, in world space. Needed for absorption of nested materials.
 
   optix::float3 wo;             // Outgoing direction, to observer, in world space.
   optix::float3 wi;             // Incoming direction, to light, in world space.
@@ -71,6 +89,8 @@ struct PerRayData
 
   optix::float3 f_over_pdf;     // BSDF sample throughput, pre-multiplied f_over_pdf = bsdf.f * fabsf(dot(wi, ns) / bsdf.pdf;
   float         pdf;            // The last BSDF sample's pdf, tracked for multiple importance sampling.
+
+  optix::float3 extinction;     // The current volume's extinction coefficient. (Only absorption in this implementation.)
 
   unsigned int  seed;           // Random number generator input.
 };

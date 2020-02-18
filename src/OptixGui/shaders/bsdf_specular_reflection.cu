@@ -26,27 +26,31 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "app_config.cuh"
 
-#ifndef MATERIAL_PARAMETER_CUH
-#define MATERIAL_PARAMETER_CUH
+#include <optix.h>
+#include <optixu/optixu_math_namespace.h>
 
-#include "function_indices.cuh"
+#include "rt_function.cuh"
+#include "material_parameter.cuh"
+#include "per_ray_data.cuh"
 
-// Just some hardcoded material parameter system which allows to show a few fundamental BSDFs.
-// Alignment of all data types used here is 4 bytes.
-struct MaterialParameter
+RT_CALLABLE_PROGRAM void sample_bsdf_specular_reflection(MaterialParameter const& parameters, State const& state, PerRayData& prd)
 {
-  FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
-  optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
-  optix::float3 absorption; // Absorption coefficient
-  float         ior;        // Index of refraction
-  unsigned int  flags;      // Thin-walled on/off
+  prd.wi = optix::reflect(-prd.wo, state.normal);
 
-  // Manual padding to 16-byte alignment goes here.
-  float unused0;
-  float unused1;
-  float unused2;
-};
+  if (optix::dot(prd.wi, state.geoNormal) <= 0.0f) // Do not sample opaque materials below the geometric surface.
+  {
+    prd.flags |= FLAG_TERMINATE;
+    return;
+  }
 
-#endif // MATERIAL_PARAMETER_CUH
+  prd.f_over_pdf = parameters.albedo;
+  prd.pdf        = 1.0f;
+}
+
+// This is actually never reached, because the FLAG_DIFFUSE flag is not set when a specular BSDF is has been sampled.
+RT_CALLABLE_PROGRAM float4 eval_bsdf_specular_reflection(MaterialParameter const& parameters, State const& state, PerRayData const& prd, float3 const& wiL)
+{
+  return make_float4(0.0f);
+}

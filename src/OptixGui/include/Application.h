@@ -55,6 +55,7 @@
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
 
+#include "include/LensShader.h"
 #include "include/PinholeCamera.h"
 #include "include/Timer.h"
 
@@ -84,14 +85,16 @@ enum GuiState
 };
 
 
-// Host side GUI material parameters.
-// (The separation between host side GUI parameters and the MaterialParameters struct on device side
-//  will become clearer in later examples, where GUI parameters are not just copied to the buffer.)
+// Host side GUI material parameters
 struct MaterialParameterGUI
 {
-  optix::float3 albedo; // albedo, color, tint, throughput change for specular materials.
+  FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
+  optix::float3 albedo;     // Tint, throughput change for specular materials
+  bool          thinwalled;
+  optix::float3 absorptionColor; // absorption color and distance scale together build the absorption coefficient
+  float         volumeDistanceScale;
+  float         ior;        // index of refraction
 };
-
 
 class Application
 {
@@ -167,11 +170,13 @@ private:
   bool         m_interop;
   bool         m_light;
   unsigned int m_missID;
+  std::string m_environmentFilename;
 
   // Application GUI parameters.
   int   m_minPathLength;       // Minimum path length after which Russian Roulette path termination starts.
   int   m_maxPathLength;       // Maximum path length.
   float m_sceneEpsilonFactor;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
+  float m_environmentRotation;
 
   int   m_iterationIndex;
 
@@ -194,6 +199,14 @@ private:
   std::vector<MaterialParameterGUI> m_guiMaterialParameters;
   optix::Buffer                     m_bufferMaterialParameters; // Array of MaterialParameters.
 
+  LensShader m_cameraType;
+
+  int        m_shutterType;
+
+
+  optix::Buffer m_bufferLensShader;
+  optix::Buffer m_bufferSampleBSDF;
+  optix::Buffer m_bufferEvalBSDF;
   optix::Buffer m_bufferSampleLight;
 
   bool   m_present; // This controls if the texture image is updated per launch or only once a second.
@@ -228,7 +241,10 @@ private:
 
   std::vector<LightDefinition> m_lightDefinitions;
   optix::Buffer                m_bufferLightDefinitions;
-  optix::Material m_opaqueMaterial;
+
+  // There are only two types of materials in this demo.
+  // The material parameters for these are determined by the parMaterialIndex variable on the GeometryInstance.
+  optix::Material m_opaqueMaterial; // Used for all materials without cutout opacity.
   optix::Material m_lightMaterial;  // Used for all geometric lights. (Special cased diffuse emission distribution function to simplify the material system.)
 
   // The root node of the OptiX scene graph (sysTopObject)

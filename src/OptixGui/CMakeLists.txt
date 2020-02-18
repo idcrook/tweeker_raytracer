@@ -223,22 +223,26 @@ OPTIX_add_sample_executable( optixGui
   Sphere.cpp
   Torus.cpp
 
-  include/Timer.h
-  Timer.cpp
+  include/LensShader.h
 
   include/PinholeCamera.h
   PinholeCamera.cpp
 
+  include/Timer.h
+  Timer.cpp
+
   include/MyAssert.h
 
   shaders/app_config.cuh
-  shaders/rt_assert.cuh
-  shaders/rt_function.cuh
-  shaders/shader_common.cuh
+
+  shaders/function_indices.cuh
   shaders/light_definition.cuh
   shaders/material_parameter.cuh
   shaders/per_ray_data.cuh
   shaders/random_number_generators.cuh
+  shaders/rt_assert.cuh
+  shaders/rt_function.cuh
+  shaders/shader_common.cuh
   shaders/vertex_attributes.cuh
 
   shaders/boundingbox_triangle_indexed.cu
@@ -253,12 +257,14 @@ OPTIX_add_sample_executable( optixGui
 
   shaders/anyhit.cu
 
+  shaders/lens_shader.cu
+  shaders/bsdf_diffuse_reflection.cu
+  shaders/bsdf_specular_reflection.cu
+  shaders/bsdf_specular_reflection_transmission.cu
   shaders/light_sample.cu
 
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_glfw.cpp
   bindings/imgui_impl_opengl3.h
   bindings/imgui_impl_opengl3.cpp
-
-
 )

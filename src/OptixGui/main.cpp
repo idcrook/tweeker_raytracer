@@ -368,7 +368,7 @@ int main(int argc, char* argv[])
 #endif
 
 // Create window with graphics context
-  GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "Optix Rayocaster", NULL, NULL);
+  GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "OptiX 6.5 Rayocaster", NULL, NULL);
   if (window == NULL) {
     glfw_error_callback(2, "Failed to create GLFW window..");
     glfwTerminate();
