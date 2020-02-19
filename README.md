@@ -3,7 +3,7 @@ tweeker_raytracer
 
 Experimental raytracing test bed.
 
-![intro Optix 04 - shapes](assets/img/intro_04.png)
+![intro Optix 06 - alternative camera projections nested materials](assets/img/intro_06.png)
 
 Applications:
 
@@ -75,3 +75,10 @@ build/optixGui # [options]
 OPTIX_SAMPLES_SDK_PTX_DIR=/home/dpc/projects/learning/rt/github/optix/optix_advanced_samples/src/data build/optixGui
 
 ```
+
+Image renders for `optixGui`
+----------------------------
+
+![intro Optix 04 - shapes](assets/img/intro_04.png)
+
+![intro Optix 06 - alternative camera projections nested materials](assets/img/intro_06.png)
