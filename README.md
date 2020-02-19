@@ -84,3 +84,5 @@ Image renders for `optixGui`
 ![intro Optix 04 - shapes](assets/img/intro_04.png)
 
 ![intro Optix 06 - alternative camera projections nested materials](assets/img/intro_06.png)
+
+![intro Optix 07 - image textures including environment map](assets/img/intro_07.png)
