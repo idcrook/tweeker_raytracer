@@ -278,10 +278,9 @@ void Application::guiNewFrame()
 
 }
 
-void Application::guiReferenceManual()
+void Application::guiDemoWindow()
 {
-  // ImGui::ShowDemoWindow();
-
+  ImGui::ShowDemoWindow();
 }
 
 void Application::guiRender()

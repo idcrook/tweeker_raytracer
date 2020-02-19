@@ -16,21 +16,21 @@
 #include "include/InputParser.h"
 
 
-#define Nx_MIN  (320)
-#define Ny_MIN  (200)
+// #define Nx_MIN  (320)
+// #define Ny_MIN  (200)
 
-// set maximum resolution ~ standard 4K dimensions
-#define Nx_MAX  (3840)
-#define Ny_MAX  (2240)  // was 2160, but increased so that square resolutions could hit 2240
+// // set maximum resolution ~ standard 4K dimensions
+// #define Nx_MAX  (3840)
+// #define Ny_MAX  (2240)  // was 2160, but increased so that square resolutions could hit 2240
 
-#define Nx_DEFAULT  (1200)
-#define Ny_DEFAULT  (600)
+// #define Nx_DEFAULT  (1200)
+// #define Ny_DEFAULT  (600)
 
-#define Nscene_DEFAULT (0)
-#define Nscene_MAX  (4)   // Range [0 .. Nscene_MAX]
+// #define Nscene_DEFAULT (0)
+// #define Nscene_MAX  (4)   // Range [0 .. Nscene_MAX]
 
-#define Nsamples_DEFAULT  (1024)
-#define Nsamples_MAX      (1024*10)
+#define Nsamples_DEFAULT  (64)
+#define Nsamples_MAX      (1024)
 
 // Assign default GUI window size
 #define GUI_WINDOW_DEFAULT_STARTING_Nx  (1280)
@@ -59,24 +59,22 @@ App Options:
 
 )";
   std::cerr <<
-    "TBD  -s | --scene <int>   Scene selection number, N: 0, 1, (max: " << Nscene_MAX << ')' << std::endl <<
-    "  -x | -dx <int>       Output image width, x dimension (default: "  << Nx_DEFAULT << ')' << std::endl <<
-    "  -y | -dy <int>       Output image height, y dimension (default: " << Ny_DEFAULT << ')' << std::endl <<
-    "  -p | -ns <int>       Sample each pixel N times, N: 1, (max: " << Nsamples_MAX << ')' << std::endl <<
-    std::endl <<
+    // "  -s | --scene <int>   Scene selection number, N: 0, 1, (max: " << Nscene_MAX << ')' << std::endl <<
+    // "  -x | -dx <int>       Output image width, x dimension (default: "  << Nx_DEFAULT << ')' << std::endl <<
+    // "  -y | -dy <int>       Output image height, y dimension (default: " << Ny_DEFAULT << ')' << std::endl <<
+    // std::endl <<
     "  -w | --width <int>   GUI Window client width.  (default: "     << GUI_WINDOW_DEFAULT_STARTING_Nx << ')' << std::endl <<
     "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' << std::endl <<
-    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."  << std::endl <<
+    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."    << std::endl <<
     "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
     "  -l | --light         Add an area light to the scene. "                  << std::endl <<
-    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: "   << NMiss_Shader_DEFAULT << ')' << std::endl <<
-    "  -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << "" << ')' << std::endl <<
+    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: " << NMiss_Shader_DEFAULT << ')' << std::endl <<
+    "    -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << "???" << ')' << std::endl <<
     "  -k | --stack <int>   Set the OptiX stack size (1024) (debug feature). (default: " << NOptix_Stack_Size_DEFAULT << ')' << std::endl <<
+    ""  << std::endl <<
+    "  -f | --file <filename> Save image to file and exit."  << std::endl <<
+    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << Nsamples_DEFAULT << ", max: " << Nsamples_MAX << ')' << std::endl <<
     "";
-
-  std::cerr << R"(
-  -f | --file <filename> Save image to file and exit.
-)";
 
 
   std::cerr << R"(
@@ -93,10 +91,10 @@ int main(int argc, char* argv[])
   int exit_code = EXIT_SUCCESS;
 
   // default values
-  int Nx = Nx_DEFAULT;
-  int Ny = Ny_DEFAULT;
-  int Nscene = Nscene_DEFAULT;
-  int Ns = Nsamples_DEFAULT;
+  // int Nx = Nx_DEFAULT;
+  // int Ny = Ny_DEFAULT;
+  // int Nscene = Nscene_DEFAULT;
+  int Nsamples = Nsamples_DEFAULT;
   bool Qverbose;
   bool Qdebug;
 
@@ -143,41 +141,41 @@ int main(int argc, char* argv[])
     light = true;
   }
 
-  sameOptionList.clear();
-  sameOptionList.push_back("-s");  sameOptionList.push_back("--scene");
-  const std::string &sceneNumber = cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!sceneNumber.empty()){
-      std::size_t pos;
-      int x = std::stoi(sceneNumber, &pos);
-      if (x >= 0 and x <= Nscene_MAX) {
-        Nscene = x;
-      } else {
-        std::cerr << "WARNING: Scene number " << x << " out of range. Maximum scene number: " << Nscene_MAX << std::endl;
-        std::cerr << "WARNING: Using a scene value of " << Nscene << std::endl;
-      }
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid scene number: " << sceneNumber << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
+  // sameOptionList.clear();
+  // sameOptionList.push_back("-s");  sameOptionList.push_back("--scene");
+  // const std::string &sceneNumber = cl_input.getCmdEquivalentsOption(sameOptionList);
+  // try {
+  //   if (!sceneNumber.empty()){
+  //     std::size_t pos;
+  //     int x = std::stoi(sceneNumber, &pos);
+  //     if (x >= 0 and x <= Nscene_MAX) {
+  //       Nscene = x;
+  //     } else {
+  //       std::cerr << "WARNING: Scene number " << x << " out of range. Maximum scene number: " << Nscene_MAX << std::endl;
+  //       std::cerr << "WARNING: Using a scene value of " << Nscene << std::endl;
+  //     }
+  //   }
+  // } catch (std::invalid_argument const &ex) {
+  //   printUsage(argv[0]);
+  //   std::cerr << "ERROR: Invalid scene number: " << sceneNumber << std::endl;
+  //   std::exit ( EXIT_FAILURE );
+  // }
 
   sameOptionList.clear();
-  sameOptionList.push_back("-p");  sameOptionList.push_back("-ns");
+  sameOptionList.push_back("-p");  sameOptionList.push_back("--samples");
   const std::string &numberOfSamples = cl_input.getCmdEquivalentsOption(sameOptionList);
   try {
     if (!numberOfSamples.empty()){
       std::size_t pos;
       int x = std::stoi(numberOfSamples, &pos);
       if ( (x > 0) && (x <= Nsamples_MAX))  {
-        Ns = x;
+        Nsamples = x;
       } else {
         std::cerr << "WARNING: Number of samples " << x << " is out of range. ";
         if (x > Nsamples_MAX) {
-          Ns = Nsamples_MAX;
+          Nsamples = Nsamples_MAX;
         }
-        std::cerr << "WARNING: Using a value of " << Ns << std::endl;
+        std::cerr << "WARNING: Using a value of " << Nsamples << std::endl;
       }
     }
   } catch (std::invalid_argument const &ex) {
@@ -186,61 +184,61 @@ int main(int argc, char* argv[])
     std::exit ( EXIT_FAILURE );
   }
 
-  sameOptionList.clear();
-  sameOptionList.push_back("-x");  sameOptionList.push_back("-dx");
-  const std::string &dimWidth =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!dimWidth.empty()){
-      std::size_t pos;
-      int x = std::stoi(dimWidth, &pos);
-      if (x >= Nx_MIN and x <= Nx_MAX) {
-        Nx = x;
-      } else {
-        std::cerr << "WARNING: Width (-dx) " << x << " out of range. ";
-        if (x > Nx_MAX) {
-          Nx = Nx_MAX;
-        }
-        if (x < Nx_MIN) {
-          Nx = Nx_MIN;
-        }
-        std::cerr << "WARNING: Using a value of " << Nx <<std::endl;
-      }
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid image width (-dx): " << dimWidth << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
+  // sameOptionList.clear();
+  // sameOptionList.push_back("-x");  sameOptionList.push_back("-dx");
+  // const std::string &dimWidth =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  // try {
+  //   if (!dimWidth.empty()){
+  //     std::size_t pos;
+  //     int x = std::stoi(dimWidth, &pos);
+  //     if (x >= Nx_MIN and x <= Nx_MAX) {
+  //       Nx = x;
+  //     } else {
+  //       std::cerr << "WARNING: Width (-dx) " << x << " out of range. ";
+  //       if (x > Nx_MAX) {
+  //         Nx = Nx_MAX;
+  //       }
+  //       if (x < Nx_MIN) {
+  //         Nx = Nx_MIN;
+  //       }
+  //       std::cerr << "WARNING: Using a value of " << Nx <<std::endl;
+  //     }
+  //   }
+  // } catch (std::invalid_argument const &ex) {
+  //   printUsage(argv[0]);
+  //   std::cerr << "ERROR: Invalid image width (-dx): " << dimWidth << std::endl;
+  //   std::exit ( EXIT_FAILURE );
+  // }
 
-  sameOptionList.clear();
-  sameOptionList.push_back("-y");  sameOptionList.push_back("-dy");
-  const std::string &dimHeight = cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!dimHeight.empty())
-    {
-      std::size_t pos;
-      int x = std::stoi(dimHeight, &pos);
-      if (x >= Ny_MIN and x <= Ny_MAX)
-      {
-        Ny = x;
-      }
-      else
-      {
-        std::cerr << "WARNING: Width (-dy) " << x << " out of range. ";
-        if (x > Ny_MAX) {
-          Ny = Ny_MAX;
-        }
-        if (x < Ny_MIN) {
-          Ny = Ny_MIN;
-        }
-        std::cerr << "WARNING: Using a value of " << Ny <<std::endl;
-      }
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid image height (-dy): " << dimHeight << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
+  // sameOptionList.clear();
+  // sameOptionList.push_back("-y");  sameOptionList.push_back("-dy");
+  // const std::string &dimHeight = cl_input.getCmdEquivalentsOption(sameOptionList);
+  // try {
+  //   if (!dimHeight.empty())
+  //   {
+  //     std::size_t pos;
+  //     int x = std::stoi(dimHeight, &pos);
+  //     if (x >= Ny_MIN and x <= Ny_MAX)
+  //     {
+  //       Ny = x;
+  //     }
+  //     else
+  //     {
+  //       std::cerr << "WARNING: Width (-dy) " << x << " out of range. ";
+  //       if (x > Ny_MAX) {
+  //         Ny = Ny_MAX;
+  //       }
+  //       if (x < Ny_MIN) {
+  //         Ny = Ny_MIN;
+  //       }
+  //       std::cerr << "WARNING: Using a value of " << Ny <<std::endl;
+  //     }
+  //   }
+  // } catch (std::invalid_argument const &ex) {
+  //   printUsage(argv[0]);
+  //   std::cerr << "ERROR: Invalid image height (-dy): " << dimHeight << std::endl;
+  //   std::exit ( EXIT_FAILURE );
+  // }
 
   sameOptionList.clear();
   sameOptionList.push_back("-w");  sameOptionList.push_back("--width");
@@ -469,7 +467,7 @@ int main(int argc, char* argv[])
 
       g_app->guiNewFrame();
 
-      //g_app->guiReferenceManual(); // DAR HACK The ImGui "Programming Manual" as example code.
+      //g_app->guiDemoWindow(); // ImGui example code.
 
       g_app->guiWindow(); // The OptiX introduction example GUI window.
 
@@ -487,7 +485,7 @@ int main(int argc, char* argv[])
 
     else
     {
-      for (int i = 0; i < 64; ++i) // Accumulate 64 samples per pixel.
+      for (int i = 0; i < Nsamples; ++i) // Accumulate samples per pixel.
       {
         g_app->render();  // OptiX rendering and OpenGL texture update.
       }

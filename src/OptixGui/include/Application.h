@@ -130,7 +130,7 @@ public:
   void guiEventHandler();
   void guiRender();
 
-  void guiReferenceManual(); // DAR HACK DEBUG The IMGUI "programming manual" in form of a live window.
+  void guiDemoWindow(); // IMGUI demo in live window.
 
 private:
   void getSystemInformation();
