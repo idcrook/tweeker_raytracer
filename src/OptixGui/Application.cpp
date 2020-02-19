@@ -163,7 +163,8 @@ Application::Application(GLFWwindow* window,
 
   // Renderer setup and GUI parameters.
   m_minPathLength       = 2;    // Minimum path length after which Russian Roulette path termination starts.
-  m_maxPathLength       = 10;   // Maximum path length. Crank it up a little to show nested materials.
+  //m_maxPathLength       = 10;   // Maximum path length. Crank it up a little to show nested materials.
+  m_maxPathLength       = 6;    // Maximum path length. Need at least 6 segments to see a diffuse surface through a sphere.
   m_sceneEpsilonFactor  = 500;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
   m_environmentRotation = 0.0f; // Not rotated, default camera setup looks down the negative z-axis which is the center of this image.
 
@@ -183,6 +184,9 @@ Application::Application(GLFWwindow* window,
   m_glslVS      = 0;
   m_glslFS      = 0;
   m_glslProgram = 0;
+
+  // With USE_DENOISER 1 the shader just presents the denoised texture.
+  // With USE_DENOISER 0 the shader contains the tonemapper and applies it ot the original output texture.
 
 #if 1 // Tonemapper defaults
   m_gamma          = 2.2f;
@@ -207,6 +211,10 @@ Application::Application(GLFWwindow* window,
   m_isWindowVisible = true;
 
   m_mouseSpeedRatio = 10.0f;
+
+#if USE_DENOISER
+  m_denoiseBlend = 0.0f; // 0.0f == denoised image, 1.0f == original image.
+#endif
 
   m_pinholeCamera.setViewport(m_width, m_height);
 
@@ -246,6 +254,31 @@ void Application::reshape(int width, int height)
     {
       m_bufferOutput->setSize(m_width, m_height); // RGBA32F buffer.
 
+#if USE_DENOISER
+      m_bufferAlbedo->setSize(m_width, m_height);     // RGBA32F buffer.
+      m_bufferTonemapped->setSize(m_width, m_height); // RGBA32F buffer.
+      m_bufferDenoised->setSize(m_width, m_height);   // RGBA32F buffer.
+      if (m_interop)
+      {
+        m_bufferDenoised->unregisterGLBuffer(); // Must unregister or CUDA won't notice the size change and crash.
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_bufferDenoised->getGLBOId());
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, m_bufferDenoised->getElementSize() * m_width * m_height, nullptr, GL_STREAM_DRAW);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        m_bufferDenoised->registerGLBuffer();
+      }
+
+      // Because the CommandList has no interface to set launch dimensions per stage, build a new one with the new size.
+      if (m_commandListDenoiser && m_stageDenoiser)
+      {
+        m_commandListDenoiser->destroy();
+
+        m_commandListDenoiser = m_context->createCommandList();
+
+        m_commandListDenoiser->appendLaunch(1, m_width, m_height); // Entrypoint 1 is a custom tonemapper launch. // DAR BUG Workaround for denoiser allocations.
+        m_commandListDenoiser->appendPostprocessingStage(m_stageDenoiser, m_width, m_height);
+        m_commandListDenoiser->finalize();
+      }
+#else
       // When not using the denoiser this is the buffer which is displayed.
       if (m_interop)
       {
@@ -255,6 +288,7 @@ void Application::reshape(int width, int height)
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
         m_bufferOutput->registerGLBuffer();
       }
+#endif
     }
     catch(optix::Exception& e)
     {
@@ -458,7 +492,11 @@ void Application::initRenderer()
 {
   try
   {
-    m_context->setEntryPointCount(1);  // 0 = render // Tonemapper is a GLSL shader in this case.
+#if USE_DENOISER
+    m_context->setEntryPointCount(2); // 0 = render, 1 = tonemapper
+#else
+    m_context->setEntryPointCount(1); // 0 = render // Tonemapper is a GLSL shader in this case.
+#endif
     m_context->setRayTypeCount(2);    // 0 = radiance, 1 = shadow
 
 
@@ -478,12 +516,20 @@ void Application::initRenderer()
     m_context["sysEnvironmentRotation"]->setFloat(m_environmentRotation);
     m_context["sysIterationIndex"]->setInt(0); // With manual accumulation, 0 fills the buffer, accumulation starts at 1. On the VCA this variable is unused!
 
-    // RT_BUFFER_INPUT_OUTPUT to support accumulation.
+#if USE_DENOISER
+    // When the denoiser is running this buffer is never shown and can stay on the GPU which is achieved by setting the RT_BUFFER_GPU_LOCAL flag,
+    // which will make accumulation faster, esp. on multi-GPU systems! The OptiX load balancer is static.
+    // This is the input to the custom tonemapper entry point which combines the partial results from the individual device buffers on multi-GPU systems
+    // as required for the following LDR denoiser stage.
+    m_bufferOutput = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT | RT_BUFFER_GPU_LOCAL, RT_FORMAT_FLOAT4, m_width, m_height); // RGBA32F, the noisy beauty image.
+#else
     // In case of an OpenGL interop buffer, that is automatically registered with CUDA now! Must unregister/register around size changes.
+    // The RT_BUFFER_GPU_LOCAL could be used on a separate accumulation buffer to improve performance on multi-GPU systems.
     m_bufferOutput = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_INPUT_OUTPUT, m_pboOutputBuffer)
                                  : m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT);
     m_bufferOutput->setFormat(RT_FORMAT_FLOAT4); // RGBA32F
     m_bufferOutput->setSize(m_width, m_height);
+#endif
 
     m_context["sysOutputBuffer"]->set(m_bufferOutput);
 
@@ -494,6 +540,17 @@ void Application::initRenderer()
     it = m_mapOfPrograms.find("exception");
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_context->setExceptionProgram(0, it->second); // entrypoint
+
+#if USE_DENOISER
+    // DAR HACK For the denoiser CommandList.
+    it = m_mapOfPrograms.find("raygeneration_tonemapper");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_context->setRayGenerationProgram(1, it->second); // entrypoint
+
+    it = m_mapOfPrograms.find("exception_tonemapper");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_context->setExceptionProgram(1, it->second); // entrypoint
+#endif
 
     it = m_mapOfPrograms.find("miss");
     MY_ASSERT(it != m_mapOfPrograms.end());
@@ -510,6 +567,59 @@ void Application::initRenderer()
 
     // Camera shutter selection
     m_context["sysShutterType"]->setInt(m_shutterType);
+#if USE_DENOISER
+    // Initialize the denoiser.
+    // This buffer is the input to the denoiser and generated with the raygeneration program at entry point 1 in the appendLaunch() stage below.
+    m_bufferTonemapped = m_context->createBuffer(RT_BUFFER_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height); // RGBA32F
+    m_context["sysTonemappedBuffer"]->setBuffer(m_bufferTonemapped);
+
+    // The HDR float4 buffer after denoising. This one will be displayed when the denoiser is active.
+    m_bufferDenoised = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_OUTPUT, m_pboOutputBuffer)
+                                   : m_context->createBuffer(RT_BUFFER_OUTPUT);
+    m_bufferDenoised->setFormat(RT_FORMAT_FLOAT4); // RGBA32F
+    m_bufferDenoised->setSize(m_width, m_height);
+
+    // Optional buffer for the denoiser. Improves denoising quality.
+    m_bufferAlbedo  = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height);
+    m_context["sysAlbedoBuffer"]->setBuffer(m_bufferAlbedo);
+
+    // Optional buffer for the denoiser. Improves denoising quality, but not as effective as the albedo so leaving it away to save memeory.
+    //m_bufferNormals = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, 0, 0); // Currently not rendered.
+
+    m_stageDenoiser = m_context->createBuiltinPostProcessingStage("DLDenoiser");
+    m_stageDenoiser->declareVariable("input_buffer");
+    m_stageDenoiser->declareVariable("output_buffer");
+    m_stageDenoiser->declareVariable("input_albedo_buffer");
+    //m_stageDenoiser->declareVariable("input_normal_buffer");
+    m_stageDenoiser->declareVariable("blend");
+
+    optix::Variable v = m_stageDenoiser->queryVariable("input_buffer");
+    v->setBuffer(m_bufferTonemapped);
+    v = m_stageDenoiser->queryVariable("output_buffer");
+    v->setBuffer(m_bufferDenoised);
+    v = m_stageDenoiser->queryVariable("blend");
+    v->setFloat(m_denoiseBlend);
+    v = m_stageDenoiser->queryVariable("input_albedo_buffer");
+    v->setBuffer(m_bufferAlbedo);
+    //v = m_stageDenoiser->queryVariable("input_normal_buffer");
+    //v->setBuffer(m_bufferNormals);
+
+    m_commandListDenoiser = m_context->createCommandList();
+
+    // DAR BUG in OptiX 5.0.0: One appendLaunch() is required here to trigger the denoiser allocations.
+    m_commandListDenoiser->appendLaunch(1, m_width, m_height); // Entrypoint 1 is a custom tonemapper launch.
+    m_commandListDenoiser->appendPostprocessingStage(m_stageDenoiser, m_width, m_height);
+    m_commandListDenoiser->finalize();
+
+    // Set the variables for the tonemapper raygeneration entrypoint 1, which tone-maps the sysOutputBuffer contents to the sysTonemappedBuffer.
+    m_context["sysColorBalance"]->setFloat(m_colorBalance);
+    m_context["sysInvGamma"]->setFloat(1.0f / m_gamma);
+    m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
+    m_context["sysBurnHighlights"]->setFloat(m_burnHighlights);
+    m_context["sysCrushBlacks"]->setFloat(m_crushBlacks + m_crushBlacks + 1.0f);
+    m_context["sysSaturation"]->setFloat(m_saturation);
+#endif // USE_DENOISER
+
   }
   catch(optix::Exception& e)
   {
@@ -591,9 +701,37 @@ bool Application::render()
     // Only update the texture when a restart happened or one second passed to reduce required bandwidth.
     if (m_presentNext)
     {
+#if USE_DENOISER
+      m_commandListDenoiser->execute(); // Now the result is inside the m_denoisedBuffer.
+#endif
+
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, m_hdrTexture); // Manual accumulation always renders into the m_hdrTexture.
 
+#if USE_DENOISER
+      // DAR DEBUG Show the albedo buffer.
+      //const void* data = m_bufferAlbedo->map(0, RT_BUFFER_MAP_READ);
+      //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
+      //m_bufferAlbedo->unmap();
+
+      // DAR DEBUG Show the tonemapped buffer.
+      //const void* data = m_bufferTonemapped->map(0, RT_BUFFER_MAP_READ);
+      //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
+      //m_bufferTonemapped->unmap();
+
+      if (m_interop)
+      {
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_bufferDenoised->getGLBOId());
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, (void*) 0); // RGBA32F from byte offset 0 in the pixel unpack buffer.
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+      }
+      else
+      {
+        const void* data = m_bufferDenoised->map(0, RT_BUFFER_MAP_READ);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
+        m_bufferDenoised->unmap();
+      }
+#else
       if (m_interop)
       {
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, m_bufferOutput->getGLBOId());
@@ -606,6 +744,7 @@ bool Application::render()
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
         m_bufferOutput->unmap();
       }
+#endif
 
       repaint = true; // Indicate that there is a new image.
 
@@ -669,7 +808,12 @@ void Application::display()
 
 void Application::screenshot(std::string const& filename)
 {
+#if USE_DENOISER
+  m_commandListDenoiser->execute(); // Must call the post-processing command list at least once to get the data into the denoised buffer.
+  sutil::writeBufferToFile(filename.c_str(), m_bufferDenoised); // Store the denoised buffer!
+#else
   sutil::writeBufferToFile(filename.c_str(), m_bufferOutput);
+#endif
   std::cerr << "Wrote " << filename << std::endl;
 }
 
@@ -726,6 +870,20 @@ void Application::initGLSL()
     "  varTexCoord0 = attrTexCoord0;\n"
     "}\n";
 
+#if USE_DENOISER
+  // When the built-in AI denoiser is active, simply copy the denoised image data.
+  static const std::string fsSource =
+    "#version 330\n"
+    "uniform sampler2D samplerHDR;\n"
+    "in vec2 varTexCoord0;\n"
+    "layout(location = 0, index = 0) out vec4 outColor;\n"
+    "void main()\n"
+    "{\n"
+    "  outColor = texture(samplerHDR, varTexCoord0);\n"
+    "}\n";
+
+#else
+
   static const std::string fsSource =
     "#version 330\n"
     "uniform sampler2D samplerHDR;\n"
@@ -752,6 +910,7 @@ void Application::initGLSL()
     "  ldrColor = pow(ldrColor, vec3(invGamma));\n"
     "  outColor = vec4(ldrColor, 1.0);\n"
     "}\n";
+#endif // USE_DENOISER
 
   GLint vsCompiled = 0;
   GLint fsCompiled = 0;
@@ -807,13 +966,15 @@ void Application::initGLSL()
       glUseProgram(m_glslProgram);
 
       glUniform1i(glGetUniformLocation(m_glslProgram, "samplerHDR"), 0);       // texture image unit 0
+#if !USE_DENOISER
+      // These varibles do not exist when the denoiser is active. In that case the GLSL program simply copies the HDR image data to the screen.
       glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
       glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
       glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"), m_crushBlacks + m_crushBlacks + 1.0f);
       glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
-
+#endif
       glUseProgram(0);
     }
   }
@@ -874,6 +1035,13 @@ void Application::guiWindow()
       m_context["sysEnvironmentRotation"]->setFloat(m_environmentRotation);
       restartAccumulation();
     }
+#if USE_DENOISER
+    if (ImGui::DragFloat("Denoise Blend", &m_denoiseBlend, 0.01f, 0.0f, 1.0f, "%.2f"))
+    {
+      optix::Variable v = m_stageDenoiser->queryVariable("blend");
+      v->setFloat(m_denoiseBlend);
+    }
+#endif
     if (ImGui::DragInt("Frames", &m_frames, 1.0f, 0, 10000))
     {
       if (m_frames != 0 && m_frames < m_iterationIndex) // If we already rendered more frames, start again.
@@ -890,45 +1058,73 @@ void Application::guiWindow()
   {
     if (ImGui::ColorEdit3("Balance", (float*) &m_colorBalance))
     {
+#if USE_DENOISER
+      m_context["sysColorBalance"]->setFloat(m_colorBalance);
+#else
       glUseProgram(m_glslProgram);
       glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.01f, 10.0f)) // Must not get 0.0f
     {
+#if USE_DENOISER
+      m_context["sysInvGamma"]->setFloat(1.0f / m_gamma);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("White Point", &m_whitePoint, 0.01f, 0.01f, 255.0f, "%.2f", 2.0f)) // Must not get 0.0f
     {
+#if USE_DENOISER
+      m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("Burn Lights", &m_burnHighlights, 0.01f, 0.0f, 10.0f, "%.2f"))
     {
+#if USE_DENOISER
+      m_context["sysBurnHighlights"]->setFloat(m_burnHighlights);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("Crush Blacks", &m_crushBlacks, 0.01f, 0.0f, 1.0f, "%.2f"))
     {
+#if USE_DENOISER
+      m_context["sysCrushBlacks"]->setFloat(m_crushBlacks + m_crushBlacks + 1.0f);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"),  m_crushBlacks + m_crushBlacks + 1.0f);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("Saturation", &m_saturation, 0.01f, 0.0f, 10.0f, "%.2f"))
     {
+#if USE_DENOISER
+      m_context["sysSaturation"]->setFloat(m_saturation);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
       glUseProgram(0);
+#endif
     }
     if (ImGui::DragFloat("Brightness", &m_brightness, 0.01f, 0.0f, 100.0f, "%.2f", 2.0f))
     {
+#if USE_DENOISER
+      m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
+#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUseProgram(0);
+#endif
     }
   }
   if (ImGui::CollapsingHeader("Materials"))
@@ -1151,6 +1347,12 @@ void Application::initPrograms()
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
     m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception"); // entry point 0
 
+#if USE_DENOISER
+    m_mapOfPrograms["raygeneration_tonemapper"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration_tonemapper"); // entry point 1
+    m_mapOfPrograms["exception_tonemapper"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception_tonemapper"); // entry point 1
+#endif
+
+
     // There can be only one of the miss programs active.
     switch (m_missID)
     {
@@ -1334,10 +1536,10 @@ void Application::initMaterials()
 
   MaterialParameterGUI parameters;
 
-  // Lambert material for the floor.
+  // Lambert material (for the floor)
   parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(0.5f); // Grey. Modulates the albedo texture.
-  parameters.useAlbedoTexture    = true;
+  parameters.albedo              = optix::make_float3(0.5f); // Grey. (Modulates the albedo texture.)
+  parameters.useAlbedoTexture    = false;
   parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
   parameters.absorptionColor     = optix::make_float3(1.0f);
@@ -1345,51 +1547,38 @@ void Application::initMaterials()
   parameters.ior                 = 1.5f;
   m_guiMaterialParameters.push_back(parameters); // 0
 
-  // Water material for the box.
-  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(1.0f);
-  parameters.useAlbedoTexture    = false;
-  parameters.useCutoutTexture    = false;
-  parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.75f, 0.75f, 0.95f); // Blue
-  parameters.volumeDistanceScale = 1.0f;
-  parameters.ior                 = 1.33f; // Water
-  m_guiMaterialParameters.push_back(parameters); // 1
-
-  // Glass material for the sphere inside that box to show nested materials!
-  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(1.0f);
-  parameters.useAlbedoTexture    = false;
-  parameters.useCutoutTexture    = false;
-  parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.5f, 0.75f, 0.5f); // Green
-  parameters.volumeDistanceScale = 1.0f;
-  parameters.ior                 = 1.52f; // Flint glass. Higher IOR than the surrounding box.
-  m_guiMaterialParameters.push_back(parameters); // 2
-
   // Lambert material with cutout opacity.
-  parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(0.75f); // optix::make_float3(0.980392f, 0.729412f, 0.470588f);
+  parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION;
+  parameters.albedo              = optix::make_float3(0.6f, 0.0f, 0.0f); // Red.
   parameters.useAlbedoTexture    = false;
-  // Note that this is a one time initialization in this demo, for performance reasons.
-  // Materials without cutout opacity do not need an anyhit program on the radiance ray type which is faster.
   parameters.useCutoutTexture    = true;
   parameters.thinwalled          = true; // Materials with cutout opacity should always be thinwalled.
-  parameters.absorptionColor     = optix::make_float3(0.980392f, 0.729412f, 0.470588f); // optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  parameters.absorptionColor     = optix::make_float3(0.25f);
   parameters.volumeDistanceScale = 1.0f;
-  parameters.ior                 = 1.5f; // Glass.
-  m_guiMaterialParameters.push_back(parameters); // 3
+  parameters.ior                 = 1.5f;
+  m_guiMaterialParameters.push_back(parameters); // 1
 
-  // Tinted mirror material.
-  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  // Water material.
+  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION;
+  parameters.albedo              = optix::make_float3(1.0f);
   parameters.useAlbedoTexture    = false;
   parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.9f, 0.8f, 0.8f); // Light red.
+  parameters.absorptionColor     = optix::make_float3(0.980392f, 0.729412f, 0.470588f); // My favorite test color.
   parameters.volumeDistanceScale = 1.0f;
   parameters.ior                 = 1.33f; // Water
-  m_guiMaterialParameters.push_back(parameters); // 4
+  m_guiMaterialParameters.push_back(parameters); // 2
+
+  // Tinted mirror material.
+  parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION;
+  parameters.albedo              = optix::make_float3(0.2f, 0.2f, 0.8f); // Not full primary color to get nice HDR highlights.
+  parameters.useAlbedoTexture    = false;
+  parameters.useCutoutTexture    = false;
+  parameters.thinwalled          = false;
+  parameters.absorptionColor     = optix::make_float3(0.6f, 0.6f, 0.8f);
+  parameters.volumeDistanceScale = 1.0f;
+  parameters.ior                 = 1.33f;
+  m_guiMaterialParameters.push_back(parameters); // 3
 
   try
   {
@@ -1508,7 +1697,7 @@ void Application::createScene()
     giBox->setGeometry(geoBox);
     giBox->setMaterialCount(1);
     giBox->setMaterial(0, (m_guiMaterialParameters[1].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
-    giBox["parMaterialIndex"]->setInt(1); // Using parameters in sysMaterialParameters[1].
+    giBox["parMaterialIndex"]->setInt(1); // This one has cutout opacity.
 
     optix::Acceleration accBox = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accBox);
@@ -1520,7 +1709,7 @@ void Application::createScene()
 
     float trafoBox[16] =
     {
-      1.0f, 0.0f, 0.0f, -2.5f, // Move to the left.
+      1.0f, 0.0f, 0.0f, -3.0f, // Move to the left.
       0.0f, 1.0f, 0.0f, 1.25f, // The box is modeled with unit coordinates in the range [-1, 1], Move it above the floor plane.
       0.0f, 0.0f, 1.0f, 0.0f,
       0.0f, 0.0f, 0.0f, 1.0f
@@ -1535,52 +1724,14 @@ void Application::createScene()
     m_rootGroup->setChildCount(count + 1);
     m_rootGroup->setChild(count, trBox);
 
-#if 1 // Show nested materials. Put a smaller glass sphere inside the box.
-
-    // Add a tessellated sphere with 180 longitudes and 90 latitudes, radius 1.0f and fully closed at the upper pole.
-    optix::Geometry geoNested = createSphere(180, 90, 1.0f, M_PIf);
-
-    optix::GeometryInstance giNested = m_context->createGeometryInstance();
-    giNested->setGeometry(geoNested);
-    giNested->setMaterialCount(1);
-    giNested->setMaterial(0, (m_guiMaterialParameters[2].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
-    giNested["parMaterialIndex"]->setInt(2); // Using parameters in sysMaterialParameters[2].
-
-    optix::Acceleration accNested = m_context->createAcceleration(m_builder);
-    setAccelerationProperties(accNested);
-
-    optix::GeometryGroup ggNested = m_context->createGeometryGroup();
-    ggNested->setAcceleration(accNested);
-    ggNested->setChildCount(1);
-    ggNested->setChild(0, giNested);
-
-    float trafoNested[16] =
-    {
-      0.75f, 0.0f,  0.0f, -2.5f,  // Scale this sphere down and move it into the center of the box.
-      0.0f,  0.75f, 0.0f,  1.25f,
-      0.0f,  0.0f,  0.75f, 0.0f,
-      0.0f,  0.0f,  0.0f,  1.0f
-    };
-    optix::Matrix4x4 matrixNested(trafoNested);
-
-    optix::Transform trNested = m_context->createTransform();
-    trNested->setChild(ggNested);
-    trNested->setMatrix(false, matrixNested.getData(), matrixNested.inverse().getData());
-
-    count = m_rootGroup->getChildCount();
-    m_rootGroup->setChildCount(count + 1);
-    m_rootGroup->setChild(count, trNested);
-
-#endif
-
     // Add a tessellated sphere with 180 longitudes and 90 latitudes, radius 1.0f and fully closed at the upper pole.
     optix::Geometry geoSphere = createSphere(180, 90, 1.0f, M_PIf);
 
     optix::GeometryInstance giSphere = m_context->createGeometryInstance();
     giSphere->setGeometry(geoSphere);
     giSphere->setMaterialCount(1);
-    giSphere->setMaterial(0, (m_guiMaterialParameters[3].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
-    giSphere["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[3].
+    giSphere->setMaterial(0, (m_guiMaterialParameters[2].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
+    giSphere["parMaterialIndex"]->setInt(2); // Water material.
 
     optix::Acceleration accSphere = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accSphere);
@@ -1590,6 +1741,10 @@ void Application::createScene()
     ggSphere->setChildCount(1);
     ggSphere->setChild(0, giSphere);
 
+    optix::Transform trSphere = m_context->createTransform();
+    trSphere->setChild(ggSphere);
+
+#if 0 // Motion blur disabled to show the denoiser better on caustics through the water sphere.
     // Implement linear motion blur via the Transform on the sphere.
     float keysLinear[2 * 12] =
     {
@@ -1601,10 +1756,21 @@ void Application::createScene()
       0.0f, 1.0f, 0.0f, 1.25f,
       0.0f, 0.0f, 1.0f, 2.5f  // Move 2.5f units in positive z-axis direction.
     };
-    optix::Transform trSphere = m_context->createTransform();
-    trSphere->setChild(ggSphere);
+
     trSphere->setMotionKeys(2, RT_MOTIONKEYTYPE_MATRIX_FLOAT12, keysLinear);
     trSphere->setMotionRange(0.0f, 1.0f); // Defaults.
+#else
+    float trafoSphere[16] =
+    {
+      1.0f, 0.0f, 0.0f, 0.0f,  // In the center, to the right of the box.
+      0.0f, 1.0f, 0.0f, 1.25f, // The sphere is modeled with radius 1.0f. Move it above the floor plane.
+      0.0f, 0.0f, 1.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+    optix::Matrix4x4 matrixSphere(trafoSphere);
+
+    trSphere->setMatrix(false, matrixSphere.getData(), matrixSphere.inverse().getData());
+#endif
 
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);
@@ -1616,8 +1782,8 @@ void Application::createScene()
     optix::GeometryInstance giTorus = m_context->createGeometryInstance();
     giTorus->setGeometry(geoTorus);
     giTorus->setMaterialCount(1);
-    giTorus->setMaterial(0, (m_guiMaterialParameters[4].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
-    giTorus["parMaterialIndex"]->setInt(4); // Using parameters in sysMaterialParameters[4].
+    giTorus->setMaterial(0, (m_guiMaterialParameters[3].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
+    giTorus["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[4].
 
     optix::Acceleration accTorus = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accTorus);
@@ -1626,6 +1792,11 @@ void Application::createScene()
     ggTorus->setAcceleration(accTorus);
     ggTorus->setChildCount(1);
     ggTorus->setChild(0, giTorus);
+
+    optix::Transform trTorus = m_context->createTransform();
+    trTorus->setChild(ggTorus);
+
+#if 1 // Keep motion blur active on the torus to show it together with the denoiser.
 
     // Implement Scale-Rotation-Translation (SRT) motion blur on the torus.
     // Move to the right, along the positive x-axis and roll around that axis by 180 degrees.
@@ -1644,10 +1815,21 @@ void Application::createScene()
         1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, quat1.m_q.x, quat1.m_q.y, quat1.m_q.z, quat1.m_q.w, 5.0f, 1.25f, 0.0f
     };
 
-    optix::Transform trTorus = m_context->createTransform();
-    trTorus->setChild(ggTorus);
     trTorus->setMotionKeys(2, RT_MOTIONKEYTYPE_SRT_FLOAT16, keysSRT);
     trTorus->setMotionRange(0.0f, 1.0f); // Defaults.
+#else
+    float trafoTorus[16] =
+    {
+      1.0f, 0.0f, 0.0f, 2.5f,  // Move it to the right of the sphere.
+      0.0f, 1.0f, 0.0f, 1.25f, // The torus has an outer radius of 0.5f. Move it above the floor plane.
+      0.0f, 0.0f, 1.0f, 0.0f,
+      0.0f, 0.0f, 0.0f, 1.0f
+    };
+
+    optix::Matrix4x4 matrixTorus(trafoTorus);
+
+    trTorus->setMatrix(false, matrixTorus.getData(), matrixTorus.inverse().getData());
+#endif
 
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);

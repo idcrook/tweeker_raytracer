@@ -45,6 +45,8 @@
 // Set by BSDFs which support direct lighting. Not set means specular interaction. Cleared in the closesthit program.
 // Used to decide when to do direct lighting and multuiple importance sampling on implicit light hits.
 #define FLAG_DIFFUSE        0x00000002
+// Set when a light was hit.
+#define FLAG_LIGHT          0x00000004
 
 // Set if (0.0f <= wo_dot_ng), means looking onto the front face. (Edge-on is explicitly handled as frontface for the material stack.)
 #define FLAG_FRONTFACE      0x00000010
@@ -56,6 +58,10 @@
 // Set if the material stack is not empty.
 #define FLAG_VOLUME         0x00001000
 
+// When using the AI denoiser the renderer builds an albedo buffer to improve the denoised result.
+// This should only be written once and this flag can track if that happened. This flag is persistent along the path.
+#define FLAG_ALBEDO         0x00010000
+
 // Highest bit set means terminate path.
 #define FLAG_TERMINATE      0x80000000
 
@@ -63,7 +69,7 @@
 // In this case only the last surface interaction is kept.
 // It's needed to track the last bounce's diffuse state in case a ray hits a light implicitly for multiple importance sampling.
 // FLAG_DIFFUSE is reset in the closesthit program.
-#define FLAG_CLEAR_MASK     FLAG_DIFFUSE
+#define FLAG_CLEAR_MASK     (FLAG_DIFFUSE | FLAG_ALBEDO)
 
 // Currently only containing some vertex attributes in world coordinates.
 struct State
@@ -93,6 +99,10 @@ struct PerRayData
 
   optix::float3 extinction;     // The current volume's extinction coefficient. (Only absorption in this implementation.)
   float         opacity;       // Cutout opacity result
+
+#if USE_DENOISER
+  optix::float3 albedo;         // Albedo buffer to help the denoiser finding the correct result better.
+#endif
 
   unsigned int  seed;           // Random number generator input.
 };

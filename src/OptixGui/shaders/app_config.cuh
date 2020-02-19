@@ -45,11 +45,11 @@
 #define USE_NEXT_EVENT_ESTIMATION 1
 //#define USE_NEXT_EVENT_ESTIMATION 0
 
-// // 0 == Do not compile in anything which is related to the built-in OptiX 5.1.0 DL Denoiser.
-// // 1 == Compile in all code which is needed to run the DL Denoiser.
-// //      This needs a lot of additional graphics memory by default. Search for "maxmem" to find how to limit that.
-// //#define USE_DENOISER 1
-// #define USE_DENOISER 0
+// 0 == Do not compile in anything which is related to the built-in OptiX 5.1.0 DL Denoiser.
+// 1 == Compile in all code which is needed to run the DL Denoiser.
+//      This needs a lot of additional graphics memory by default. Search for "maxmem" to find how to limit that.
+#define USE_DENOISER 1
+//#define USE_DENOISER 0
 
 // // 0 == Disable all code which creates and fills the albedo and the normal buffers.
 // // 1 == Enable all code which creates, fills, and uses the albedo buffer.

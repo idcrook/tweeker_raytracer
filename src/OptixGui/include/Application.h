@@ -263,6 +263,15 @@ private:
   optix::Group        m_rootGroup;
   optix::Acceleration m_rootAcceleration;
 
+#if USE_DENOISER
+  optix::CommandList         m_commandListDenoiser;
+  optix::PostprocessingStage m_stageDenoiser;
+  optix::Buffer              m_bufferTonemapped;
+  optix::Buffer              m_bufferDenoised;
+  optix::Buffer              m_bufferAlbedo;
+  //optix::Buffer              m_bufferNormals;
+  float                      m_denoiseBlend;
+#endif
 
 };
 

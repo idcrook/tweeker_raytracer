@@ -68,12 +68,18 @@ RT_PROGRAM void closesthit_light()
   thePrd.flags |= (0.0f <= cosTheta) ? FLAG_FRONTFACE : 0;
 
   thePrd.radiance = make_float3(0.0f); // Backside is black.
+#if USE_DENOISER
+  thePrd.albedo   = make_float3(0.0f); // Backside is black.
+#endif
 
   if (thePrd.flags & FLAG_FRONTFACE) // Looking at the front face?
   {
     const LightDefinition light = sysLightDefinitions[parLightIndex];
 
     thePrd.radiance = light.emission;
+#if USE_DENOISER
+    thePrd.albedo   = light.emission;
+#endif
 
 #if USE_NEXT_EVENT_ESTIMATION
     const float pdfLight = (thePrd.distance * thePrd.distance) / (light.area * cosTheta); // Solid angle pdf. Assumes light.area != 0.0f.
@@ -87,5 +93,5 @@ RT_PROGRAM void closesthit_light()
   }
 
   // Lights have no other material properties than emission in this demo. Terminate the path.
-  thePrd.flags |= FLAG_TERMINATE;
+  thePrd.flags |= (FLAG_LIGHT | FLAG_TERMINATE);
 }

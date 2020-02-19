@@ -107,6 +107,11 @@ RT_PROGRAM void closesthit()
     //parameters.albedo *= powf(texColor, 2.2f); // sRGB gamma correction done manually.
   }
 
+#if USE_DENOISER
+  // The raygeneration program uses this to write the denoiser's albedo buffer.
+  thePrd.albedo = parameters.albedo;
+#endif
+
   // Start fresh with the next BSDF sample.  (Either of these values remaining zero is an end-of-path condition.)
   thePrd.f_over_pdf = make_float3(0.0f);
   thePrd.pdf        = 0.0f;

@@ -39,6 +39,10 @@
 
 rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
 
+#if USE_DENOISER
+rtBuffer<float4, 2> sysAlbedoBuffer; // RGBA32F
+#endif
+
 rtDeclareVariable(rtObject, sysTopObject, , );
 rtDeclareVariable(float,    sysSceneEpsilon, , );
 rtDeclareVariable(int2,     sysPathLengths, , );
@@ -52,14 +56,14 @@ rtBuffer< rtCallableProgramId<void(const float2 pixel, const float2 screen, cons
 rtDeclareVariable(uint2, theLaunchDim,   rtLaunchDim, );
 rtDeclareVariable(uint2, theLaunchIndex, rtLaunchIndex, );
 
-RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
+RT_FUNCTION void integrator(PerRayData& prd, float3& radiance, float3& albedo)
 {
   // This renderer supports nested volumes. Four levels is plenty enough for most cases.
   // The absorption coefficient and IOR of the volume the ray is currently inside.
   float4 absorptionStack[MATERIAL_STACK_SIZE]; // .xyz == absorptionCoefficient (sigma_a), .w == index of refraction
 
   radiance = make_float3(0.0f); // Start with black.
-
+  albedo   = make_float3(0.0f); // Start with black.
 
   // case 0: Standard stochastic motion blur.
   float time = rng(prd.seed); // Set the time of this path to a random value in the range [0, 1).
@@ -127,6 +131,31 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
 
     radiance += throughput * prd.radiance;
 
+#if USE_DENOISER
+    // In physical terms, the albedo is a single color value approximating the ratio of radiant exitance to the irradiance under uniform lighting.
+    // The albedo value can be approximated for simple materials by using the diffuse color of the first hit,
+    // or for layered materials by using a weighted sum of the individual BRDFs albedo values.
+    // For some objects such as perfect mirrors, the quality of the result might be improved by using the albedo value of a subsequent hit instead.
+#if 1
+    // When no albedo has been written before and the hit was diffuse or a light, write the albedo.
+    // DAR This makes glass materials and motion blur on specular surfaces in the demo a little noisier,
+    // but should definitely be used with high frequency textures behind transparent or around reflective materials.
+    if (!(prd.flags & FLAG_ALBEDO) && (prd.flags & (FLAG_DIFFUSE | FLAG_LIGHT)))
+    {
+      // The albedo buffer should contain the surface appearance under uniform lighting in linear color space in the range [0.0f, 1.0f].
+      // Clamp the final albedo result to that range here, because it captured the radiance when hitting lights either directly or via specular events.
+      albedo = optix::clamp(throughput * prd.albedo, 0.0f, 1.0f);
+      prd.flags |= FLAG_ALBEDO; // This flag is persistent along the path and prevents that the albedo is written more than once.
+    }
+#else
+    if (depth == 0) // Just write the albedo of the primary ray.
+    {
+      albedo = optix::clamp(throughput * prd.albedo, 0.0f, 1.0f); // See comment above. Expects linear colors in the range [0.0f, 1.0f]
+    }
+#endif
+
+#endif // USE_DENOISER
+
     // Path termination by miss shader or sample() routines.
     // If terminate is true, f_over_pdf and pdf might be undefined.
     if ((prd.flags & FLAG_TERMINATE) || prd.pdf <= 0.0f || isNull(prd.f_over_pdf))
@@ -185,8 +214,9 @@ RT_PROGRAM void raygeneration()
   sysLensShader[sysCameraType](make_float2(theLaunchIndex), make_float2(theLaunchDim), rng2(prd.seed), prd.pos, prd.wi); // Calculate the primary ray with a lens shader program.
 
   float3 radiance;
+  float3 albedo;
 
-  integrator(prd, radiance); // In this case a unidirectional path tracer.
+  integrator(prd, radiance, albedo); // In this case a unidirectional path tracer.
 
 #if USE_DEBUG_EXCEPTIONS
   // DAR DEBUG Highlight numerical errors.
@@ -212,12 +242,77 @@ RT_PROGRAM void raygeneration()
     {
       float4 dst = sysOutputBuffer[theLaunchIndex];  // RGBA32F
       sysOutputBuffer[theLaunchIndex] = optix::lerp(dst, make_float4(radiance, 1.0f), 1.0f / (float) (sysIterationIndex + 1));
+
+#if USE_DENOISER
+      dst = sysAlbedoBuffer[theLaunchIndex];  // RGBA32F
+      sysAlbedoBuffer[theLaunchIndex] = optix::lerp(dst, make_float4(albedo, 1.0f), 1.0f / (float) (sysIterationIndex + 1));
+#endif
+
     }
     else
     {
       // sysIterationIndex 0 will fill the buffer.
       // If this isn't done separately, the result of the lerp() above is undefined, e.g. dst could be NaN.
       sysOutputBuffer[theLaunchIndex] = make_float4(radiance, 1.0f);
+
+#if USE_DENOISER
+      sysAlbedoBuffer[theLaunchIndex] = make_float4(albedo, 1.0f);
+#endif
+
     }
   }
 }
+
+#if USE_DENOISER
+// OptiX 5.0.x needs at least one appendLaunch() in the post-processing CommandList or the denoiser will not trigger its memory allocations.
+// This is fixed in OptiX 5.1.0 which also supports HDR denoising directly, so that the tonemapper can be placed last again.
+// Put my own tonemapper from GLSL here to get the proper gamma corrected input into the denoiser.
+
+rtBuffer<float4, 2> sysTonemappedBuffer;
+
+rtDeclareVariable(float3, sysColorBalance, , );
+rtDeclareVariable(float,  sysInvGamma, , );
+rtDeclareVariable(float,  sysInvWhitePoint, , );
+rtDeclareVariable(float,  sysBurnHighlights, , );
+rtDeclareVariable(float,  sysCrushBlacks, , );
+rtDeclareVariable(float,  sysSaturation, , );
+
+RT_PROGRAM void raygeneration_tonemapper()
+{
+  const float3 hdrColor = make_float3(sysOutputBuffer[theLaunchIndex]);
+
+  float3 ldrColor = sysInvWhitePoint * sysColorBalance * hdrColor;
+  ldrColor *= (ldrColor * make_float3(sysBurnHighlights) + make_float3(1.0f)) / (ldrColor + make_float3(1.0f));
+
+  float luminance = optix::dot(ldrColor, make_float3(0.3f, 0.59f, 0.11f));
+  ldrColor = optix::lerp(make_float3(luminance), ldrColor, sysSaturation); // This can generate negative values for sysSaturation > 1.0f!
+  ldrColor = fmaxf(0.0f, ldrColor); // Prevent negative values.
+
+  luminance = optix::dot(ldrColor, make_float3(0.3f, 0.59f, 0.11f));
+  if (luminance < 1.0f)
+  {
+    const float3 crushed = powf(ldrColor, sysCrushBlacks);
+    ldrColor = optix::lerp(crushed, ldrColor, sqrtf(luminance));
+    ldrColor = fmaxf(0.0f, ldrColor); // Prevent negative values.
+  }
+  ldrColor = powf(ldrColor, sysInvGamma);
+
+#if USE_DEBUG_EXCEPTIONS
+  // DAR DEBUG Highlight numerical errors.
+  if (isnan(ldrColor.x) || isnan(ldrColor.y) || isnan(ldrColor.z))
+  {
+    ldrColor = make_float3(1000000.0f, 0.0f, 0.0f); // super red
+  }
+  else if (isinf(ldrColor.x) || isinf(ldrColor.y) || isinf(ldrColor.z))
+  {
+    ldrColor = make_float3(0.0f, 1000000.0f, 0.0f); // super green
+  }
+  else if (ldrColor.x < 0.0f || ldrColor.y < 0.0f || ldrColor.z < 0.0f)
+  {
+    ldrColor = make_float3(0.0f, 0.0f, 1000000.0f); // super blue
+  }
+#endif
+
+  sysTonemappedBuffer[theLaunchIndex] = make_float4(ldrColor, 1.0f);
+}
+#endif // USE_DENOISER
