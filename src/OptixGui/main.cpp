@@ -485,6 +485,7 @@ int main(int argc, char* argv[])
 
     else
     {
+      std::cerr << "Collecting " << Nsamples << " samples per pixel..." << std::endl;
       for (int i = 0; i < Nsamples; ++i) // Accumulate samples per pixel.
       {
         g_app->render();  // OptiX rendering and OpenGL texture update.
