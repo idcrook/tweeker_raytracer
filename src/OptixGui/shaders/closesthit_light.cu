@@ -65,20 +65,32 @@ RT_PROGRAM void closesthit_light()
   const float3 geoNormal = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varGeoNormal)); // PERF Not really needed when it's know that light geometry is not under Transforms.
 
   const float cosTheta = optix::dot(thePrd.wo, geoNormal);
-  thePrd.flags |= (0.0f <= cosTheta) ? FLAG_FRONTFACE : 0;
+  thePrd.flags |= (0.0f <= cosTheta) ? (FLAG_FRONTFACE | FLAG_HIT) : FLAG_HIT;
+
+  const LightDefinition light = sysLightDefinitions[parLightIndex];
 
   thePrd.radiance = make_float3(0.0f); // Backside is black.
+
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
   thePrd.albedo   = make_float3(0.0f); // Backside is black.
+#if USE_DENOISER_NORMAL
+  thePrd.normal   = -light.normal;
+#endif
+#endif
 #endif
 
   if (thePrd.flags & FLAG_FRONTFACE) // Looking at the front face?
   {
-    const LightDefinition light = sysLightDefinitions[parLightIndex];
-
     thePrd.radiance = light.emission;
+
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
     thePrd.albedo   = light.emission;
+#if USE_DENOISER_NORMAL
+    thePrd.normal   = light.normal;
+#endif
+#endif
 #endif
 
 #if USE_NEXT_EVENT_ESTIMATION

@@ -51,16 +51,16 @@
 #define USE_DENOISER 1
 //#define USE_DENOISER 0
 
-// // 0 == Disable all code which creates and fills the albedo and the normal buffers.
-// // 1 == Enable all code which creates, fills, and uses the albedo buffer.
-// //#define USE_DENOISER_ALBEDO 1
-// #define USE_DENOISER_ALBEDO 0
+// 0 == Disable all code which creates and fills the albedo and the normal buffers.
+// 1 == Enable all code which creates, fills, and uses the albedo buffer.
+#define USE_DENOISER_ALBEDO 1
+//#define USE_DENOISER_ALBEDO 0
 
-// // 0 == Disable all code which creates and fills the normal buffer. (Only possible when also using the albedo buffer.)
-// //      NOTE: 0 is the default because the normal buffer in OptiX 5.1.0 is ignored!
-// // 1 == Enable all code which creates, fills, and uses the normal buffer.
-// //      Don't use! Just for demonstration how to generate the normals in camera space.
-// #define USE_DENOISER_NORMAL 0
+// 0 == Disable all code which creates and fills the normal buffer. (Only possible when also using the albedo buffer.)
+//      NOTE: 0 is the default because the normal buffer in OptiX 5.1.0 is ignored!
+// 1 == Enable all code which creates, fills, and uses the normal buffer.
+//      Don't use! Just for demonstration how to generate the normals in camera space.
+#define USE_DENOISER_NORMAL 0
 
 // 0 == Disable all OptiX exceptions, rtPrintfs and rtAssert functionality. (Benchmark only in this mode!)
 // 1 == Enable  all OptiX exceptions, rtPrintfs and rtAssert functionality. (Really only for debugging, big performance hit!)

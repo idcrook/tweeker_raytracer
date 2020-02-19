@@ -81,7 +81,7 @@ RT_PROGRAM void closesthit()
   // Keeps the material stack from overflowing at silhouettes.
   // Prevents that silhouettes of thin-walled materials use the backface material.
   // Using the true geometry normal attribute as originally defined on the frontface!
-  thePrd.flags |= (0.0f <= optix::dot(thePrd.wo, state.geoNormal)) ? FLAG_FRONTFACE : 0;
+  thePrd.flags |= (0.0f <= optix::dot(thePrd.wo, state.geoNormal)) ? (FLAG_FRONTFACE | FLAG_HIT) : FLAG_HIT;
 
   if ((thePrd.flags & FLAG_FRONTFACE) == 0) // Looking at the backface?
   {
@@ -94,7 +94,7 @@ RT_PROGRAM void closesthit()
 
   // A material system with support for arbitrary mesh lights would evaluate its emission here.
   // But since only parallelogram area lights are supported, those get a dedicated closest hit program to simplify this demo.
-  thePrd.radiance = make_float3(0.0f);
+  thePrd.radiance  = make_float3(0.0f);
 
   MaterialParameter parameters = sysMaterialParameters[parMaterialIndex]; // Copy the material parameters locally to be able to fetch texture data once.
 
@@ -108,8 +108,12 @@ RT_PROGRAM void closesthit()
   }
 
 #if USE_DENOISER
-  // The raygeneration program uses this to write the denoiser's albedo buffer.
+#if USE_DENOISER_ALBEDO
   thePrd.albedo = parameters.albedo;
+#if USE_DENOISER_NORMAL
+    thePrd.normal = state.normal;
+#endif
+#endif
 #endif
 
   // Start fresh with the next BSDF sample.  (Either of these values remaining zero is an end-of-path condition.)

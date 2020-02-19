@@ -101,7 +101,12 @@ struct PerRayData
   float         opacity;       // Cutout opacity result
 
 #if USE_DENOISER
-  optix::float3 albedo;         // Albedo buffer to help the denoiser finding the correct result better.
+#if USE_DENOISER_ALBEDO
+  optix::float3 albedo;         // Albedo value to help the denoiser finding the correct result better.
+#if USE_DENOISER_NORMAL
+  optix::float3 normal;         // Shading normal for the denoiser's normal buffer. Only possible to use when albedo is used as well.
+#endif
+#endif
 #endif
 
   unsigned int  seed;           // Random number generator input.

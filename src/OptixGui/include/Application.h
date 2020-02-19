@@ -266,10 +266,14 @@ private:
 #if USE_DENOISER
   optix::CommandList         m_commandListDenoiser;
   optix::PostprocessingStage m_stageDenoiser;
-  optix::Buffer              m_bufferTonemapped;
+  //optix::Buffer              m_bufferTonemapped;
   optix::Buffer              m_bufferDenoised;
+#if USE_DENOISER_ALBEDO
   optix::Buffer              m_bufferAlbedo;
-  //optix::Buffer              m_bufferNormals;
+#if USE_DENOISER_NORMAL
+  optix::Buffer              m_bufferNormals; // Normals can only be used when albedo is also used.
+#endif
+#endif
   float                      m_denoiseBlend;
 #endif
 

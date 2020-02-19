@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 
 #include "shaders/material_parameter.cuh"
@@ -185,8 +186,10 @@ Application::Application(GLFWwindow* window,
   m_glslFS      = 0;
   m_glslProgram = 0;
 
-  // With USE_DENOISER 1 the shader just presents the denoised texture.
-  // With USE_DENOISER 0 the shader contains the tonemapper and applies it ot the original output texture.
+  // GLSL shaders objects and program.
+  // In OptiX 5.1.0 the denoiser supports HDR beauty buffers which this example demonstrates.
+  // Means the previous raygeneration entry point doing the tonemapping inside the CommandList can go away again
+  // and the GLSL tonemapper can run afterwards as post-process as without the denoiser.
 
 #if 1 // Tonemapper defaults
   m_gamma          = 2.2f;
@@ -255,8 +258,6 @@ void Application::reshape(int width, int height)
       m_bufferOutput->setSize(m_width, m_height); // RGBA32F buffer.
 
 #if USE_DENOISER
-      m_bufferAlbedo->setSize(m_width, m_height);     // RGBA32F buffer.
-      m_bufferTonemapped->setSize(m_width, m_height); // RGBA32F buffer.
       m_bufferDenoised->setSize(m_width, m_height);   // RGBA32F buffer.
       if (m_interop)
       {
@@ -267,6 +268,13 @@ void Application::reshape(int width, int height)
         m_bufferDenoised->registerGLBuffer();
       }
 
+#if USE_DENOISER_ALBEDO
+      m_bufferAlbedo->setSize(m_width, m_height);     // RGBA32F buffer.
+#if USE_DENOISER_NORMAL
+      m_bufferNormals->setSize(m_width, m_height);    // RGBA32F buffer.
+#endif
+#endif
+
       // Because the CommandList has no interface to set launch dimensions per stage, build a new one with the new size.
       if (m_commandListDenoiser && m_stageDenoiser)
       {
@@ -274,7 +282,6 @@ void Application::reshape(int width, int height)
 
         m_commandListDenoiser = m_context->createCommandList();
 
-        m_commandListDenoiser->appendLaunch(1, m_width, m_height); // Entrypoint 1 is a custom tonemapper launch. // DAR BUG Workaround for denoiser allocations.
         m_commandListDenoiser->appendPostprocessingStage(m_stageDenoiser, m_width, m_height);
         m_commandListDenoiser->finalize();
       }
@@ -488,15 +495,16 @@ void Application::initOptiX()
   }
 }
 
+static void callbackUsageReport(int level, const char* tag, const char* msg, void* cbdata)
+{
+  std::cout << "[" << level << "][" << std::left << std::setw(12) << tag << "] " << msg;
+}
+
 void Application::initRenderer()
 {
   try
   {
-#if USE_DENOISER
-    m_context->setEntryPointCount(2); // 0 = render, 1 = tonemapper
-#else
     m_context->setEntryPointCount(1); // 0 = render // Tonemapper is a GLSL shader in this case.
-#endif
     m_context->setRayTypeCount(2);    // 0 = radiance, 1 = shadow
 
 
@@ -510,18 +518,24 @@ void Application::initRenderer()
     m_context->setExceptionEnabled(RT_EXCEPTION_ALL, true);
 #endif
 
+    // OptiX Usage Reports.
+    // verbosity = 0: usage reports off
+    // verbosity = 1: enables error messages and important warnings.
+    // verbosity = 2: additionally enables minor warnings, performance recommendations, and scene statistics at startup or recompilation granularity.
+    // verbosity = 3: additionally enables informational messages and per-launch statistics and messages.
+    //m_context->setUsageReportCallback(callbackUsageReport, 3, NULL);
+
     // Add context-global variables here.
     m_context["sysSceneEpsilon"]->setFloat(m_sceneEpsilonFactor * 1e-7f);
     m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
     m_context["sysEnvironmentRotation"]->setFloat(m_environmentRotation);
     m_context["sysIterationIndex"]->setInt(0); // With manual accumulation, 0 fills the buffer, accumulation starts at 1. On the VCA this variable is unused!
 
+    // RT_BUFFER_INPUT_OUTPUT to support accumulation.
 #if USE_DENOISER
-    // When the denoiser is running this buffer is never shown and can stay on the GPU which is achieved by setting the RT_BUFFER_GPU_LOCAL flag,
-    // which will make accumulation faster, esp. on multi-GPU systems! The OptiX load balancer is static.
-    // This is the input to the custom tonemapper entry point which combines the partial results from the individual device buffers on multi-GPU systems
-    // as required for the following LDR denoiser stage.
-    m_bufferOutput = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT | RT_BUFFER_GPU_LOCAL, RT_FORMAT_FLOAT4, m_width, m_height); // RGBA32F, the noisy beauty image.
+    // Note that on multi-GPU systems it's not possible to use RT_BUFFER_GPU_LOCAL buffers directly as input into the denoiser,
+    // because it wouldn't be able to combine the partial results from the different devices automatically.
+    m_bufferOutput = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height); // RGBA32F, the noisy beauty image.
 #else
     // In case of an OpenGL interop buffer, that is automatically registered with CUDA now! Must unregister/register around size changes.
     // The RT_BUFFER_GPU_LOCAL could be used on a separate accumulation buffer to improve performance on multi-GPU systems.
@@ -541,17 +555,6 @@ void Application::initRenderer()
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_context->setExceptionProgram(0, it->second); // entrypoint
 
-#if USE_DENOISER
-    // DAR HACK For the denoiser CommandList.
-    it = m_mapOfPrograms.find("raygeneration_tonemapper");
-    MY_ASSERT(it != m_mapOfPrograms.end());
-    m_context->setRayGenerationProgram(1, it->second); // entrypoint
-
-    it = m_mapOfPrograms.find("exception_tonemapper");
-    MY_ASSERT(it != m_mapOfPrograms.end());
-    m_context->setExceptionProgram(1, it->second); // entrypoint
-#endif
-
     it = m_mapOfPrograms.find("miss");
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_context->setMissProgram(0, it->second); // raytype
@@ -567,57 +570,63 @@ void Application::initRenderer()
 
     // Camera shutter selection
     m_context["sysShutterType"]->setInt(m_shutterType);
-#if USE_DENOISER
-    // Initialize the denoiser.
-    // This buffer is the input to the denoiser and generated with the raygeneration program at entry point 1 in the appendLaunch() stage below.
-    m_bufferTonemapped = m_context->createBuffer(RT_BUFFER_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height); // RGBA32F
-    m_context["sysTonemappedBuffer"]->setBuffer(m_bufferTonemapped);
 
-    // The HDR float4 buffer after denoising. This one will be displayed when the denoiser is active.
+#if USE_DENOISER
+    // Initialize the HDR denoiser.
+    // The HDR float4 buffer after denoising. This one will be tonemapped and displayed with OpenGL when the denoiser is active.
     m_bufferDenoised = (m_interop) ? m_context->createBufferFromGLBO(RT_BUFFER_OUTPUT, m_pboOutputBuffer)
                                    : m_context->createBuffer(RT_BUFFER_OUTPUT);
     m_bufferDenoised->setFormat(RT_FORMAT_FLOAT4); // RGBA32F
     m_bufferDenoised->setSize(m_width, m_height);
 
+#if USE_DENOISER_ALBEDO
     // Optional buffer for the denoiser. Improves denoising quality.
     m_bufferAlbedo  = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height);
     m_context["sysAlbedoBuffer"]->setBuffer(m_bufferAlbedo);
 
-    // Optional buffer for the denoiser. Improves denoising quality, but not as effective as the albedo so leaving it away to save memeory.
-    //m_bufferNormals = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, 0, 0); // Currently not rendered.
+#if USE_DENOISER_NORMAL
+    // Optional buffer for the denoiser. Improves denoising quality, but not as effective as the albedo.
+    m_bufferNormals = m_context->createBuffer(RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, m_width, m_height);
+    m_context["sysNormalBuffer"]->setBuffer(m_bufferNormals);
+#endif
+#endif
 
     m_stageDenoiser = m_context->createBuiltinPostProcessingStage("DLDenoiser");
     m_stageDenoiser->declareVariable("input_buffer");
     m_stageDenoiser->declareVariable("output_buffer");
+#if USE_DENOISER_ALBEDO
     m_stageDenoiser->declareVariable("input_albedo_buffer");
-    //m_stageDenoiser->declareVariable("input_normal_buffer");
-    m_stageDenoiser->declareVariable("blend");
+#if USE_DENOISER_NORMAL
+    m_stageDenoiser->declareVariable("input_normal_buffer");
+#endif
+#endif
+    m_stageDenoiser->declareVariable("blend");  // The denoised image can be blended with the original input image with this variable.
+    m_stageDenoiser->declareVariable("hdr");    // OptiX 5.1.0 supports HDR denoising which is shown in this example.
+    //m_stageDenoiser->declareVariable("maxmem"); // OptiX 5.1.0 allows to limit the maximum amount of memory the DL Denoiser should use (in bytes).
 
     optix::Variable v = m_stageDenoiser->queryVariable("input_buffer");
-    v->setBuffer(m_bufferTonemapped);
+    v->setBuffer(m_bufferOutput);
     v = m_stageDenoiser->queryVariable("output_buffer");
     v->setBuffer(m_bufferDenoised);
-    v = m_stageDenoiser->queryVariable("blend");
-    v->setFloat(m_denoiseBlend);
+#if USE_DENOISER_ALBEDO
     v = m_stageDenoiser->queryVariable("input_albedo_buffer");
     v->setBuffer(m_bufferAlbedo);
-    //v = m_stageDenoiser->queryVariable("input_normal_buffer");
-    //v->setBuffer(m_bufferNormals);
+#if USE_DENOISER_NORMAL
+    v = m_stageDenoiser->queryVariable("input_normal_buffer");
+    v->setBuffer(m_bufferNormals);
+#endif
+#endif
+    v = m_stageDenoiser->queryVariable("blend");
+    v->setFloat(m_denoiseBlend); // 0.0f means full denoised buffer, 1.0f means original input image.
+    v = m_stageDenoiser->queryVariable("hdr");
+    v->setUint(1); // Enable the HDR denoiser inside OptiX 5.1.0. "hdr" is an unsigned int variable. Non-zero means enabled.
+    //v = m_stageDenoiser->queryVariable("maxmem");
+    //v->setFloat(1024.0f * 1024.0f * 512.0f); // "maxmem" is a float variable [bytes]! Limit the maximum memory the denoiser should use.
 
     m_commandListDenoiser = m_context->createCommandList();
 
-    // DAR BUG in OptiX 5.0.0: One appendLaunch() is required here to trigger the denoiser allocations.
-    m_commandListDenoiser->appendLaunch(1, m_width, m_height); // Entrypoint 1 is a custom tonemapper launch.
     m_commandListDenoiser->appendPostprocessingStage(m_stageDenoiser, m_width, m_height);
     m_commandListDenoiser->finalize();
-
-    // Set the variables for the tonemapper raygeneration entrypoint 1, which tone-maps the sysOutputBuffer contents to the sysTonemappedBuffer.
-    m_context["sysColorBalance"]->setFloat(m_colorBalance);
-    m_context["sysInvGamma"]->setFloat(1.0f / m_gamma);
-    m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
-    m_context["sysBurnHighlights"]->setFloat(m_burnHighlights);
-    m_context["sysCrushBlacks"]->setFloat(m_crushBlacks + m_crushBlacks + 1.0f);
-    m_context["sysSaturation"]->setFloat(m_saturation);
 #endif // USE_DENOISER
 
   }
@@ -709,15 +718,19 @@ bool Application::render()
       glBindTexture(GL_TEXTURE_2D, m_hdrTexture); // Manual accumulation always renders into the m_hdrTexture.
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
       // DAR DEBUG Show the albedo buffer.
       //const void* data = m_bufferAlbedo->map(0, RT_BUFFER_MAP_READ);
       //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
       //m_bufferAlbedo->unmap();
 
-      // DAR DEBUG Show the tonemapped buffer.
-      //const void* data = m_bufferTonemapped->map(0, RT_BUFFER_MAP_READ);
+#if USE_DENOISER_NORMAL
+      // DAR DEBUG Show the normal buffer.
+      //const void* data = m_bufferNormals->map(0, RT_BUFFER_MAP_READ);
       //glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_width, (GLsizei) m_height, 0, GL_RGBA, GL_FLOAT, data); // RGBA32F
-      //m_bufferTonemapped->unmap();
+      //m_bufferNormals->unmap();
+#endif
+#endif
 
       if (m_interop)
       {
@@ -870,20 +883,6 @@ void Application::initGLSL()
     "  varTexCoord0 = attrTexCoord0;\n"
     "}\n";
 
-#if USE_DENOISER
-  // When the built-in AI denoiser is active, simply copy the denoised image data.
-  static const std::string fsSource =
-    "#version 330\n"
-    "uniform sampler2D samplerHDR;\n"
-    "in vec2 varTexCoord0;\n"
-    "layout(location = 0, index = 0) out vec4 outColor;\n"
-    "void main()\n"
-    "{\n"
-    "  outColor = texture(samplerHDR, varTexCoord0);\n"
-    "}\n";
-
-#else
-
   static const std::string fsSource =
     "#version 330\n"
     "uniform sampler2D samplerHDR;\n"
@@ -910,7 +909,6 @@ void Application::initGLSL()
     "  ldrColor = pow(ldrColor, vec3(invGamma));\n"
     "  outColor = vec4(ldrColor, 1.0);\n"
     "}\n";
-#endif // USE_DENOISER
 
   GLint vsCompiled = 0;
   GLint fsCompiled = 0;
@@ -966,15 +964,12 @@ void Application::initGLSL()
       glUseProgram(m_glslProgram);
 
       glUniform1i(glGetUniformLocation(m_glslProgram, "samplerHDR"), 0);       // texture image unit 0
-#if !USE_DENOISER
-      // These varibles do not exist when the denoiser is active. In that case the GLSL program simply copies the HDR image data to the screen.
       glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
       glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
       glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"), m_crushBlacks + m_crushBlacks + 1.0f);
       glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
-#endif
       glUseProgram(0);
     }
   }
@@ -1049,7 +1044,7 @@ void Application::guiWindow()
         restartAccumulation();
       }
     }
-    if (ImGui::DragFloat("Mouse Ratio", &m_mouseSpeedRatio, 0.1f, 0.1f, 100.0f, "%.1f"))
+    if (ImGui::DragFloat("Mouse Ratio", &m_mouseSpeedRatio, 0.1f, 0.1f, 1000.0f, "%.1f"))
     {
       m_pinholeCamera.setSpeedRatio(m_mouseSpeedRatio);
     }
@@ -1058,73 +1053,45 @@ void Application::guiWindow()
   {
     if (ImGui::ColorEdit3("Balance", (float*) &m_colorBalance))
     {
-#if USE_DENOISER
-      m_context["sysColorBalance"]->setFloat(m_colorBalance);
-#else
       glUseProgram(m_glslProgram);
       glUniform3f(glGetUniformLocation(m_glslProgram, "colorBalance"), m_colorBalance.x, m_colorBalance.y, m_colorBalance.z);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("Gamma", &m_gamma, 0.01f, 0.01f, 10.0f)) // Must not get 0.0f
     {
-#if USE_DENOISER
-      m_context["sysInvGamma"]->setFloat(1.0f / m_gamma);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invGamma"), 1.0f / m_gamma);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("White Point", &m_whitePoint, 0.01f, 0.01f, 255.0f, "%.2f", 2.0f)) // Must not get 0.0f
     {
-#if USE_DENOISER
-      m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("Burn Lights", &m_burnHighlights, 0.01f, 0.0f, 10.0f, "%.2f"))
     {
-#if USE_DENOISER
-      m_context["sysBurnHighlights"]->setFloat(m_burnHighlights);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "burnHighlights"), m_burnHighlights);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("Crush Blacks", &m_crushBlacks, 0.01f, 0.0f, 1.0f, "%.2f"))
     {
-#if USE_DENOISER
-      m_context["sysCrushBlacks"]->setFloat(m_crushBlacks + m_crushBlacks + 1.0f);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "crushBlacks"),  m_crushBlacks + m_crushBlacks + 1.0f);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("Saturation", &m_saturation, 0.01f, 0.0f, 10.0f, "%.2f"))
     {
-#if USE_DENOISER
-      m_context["sysSaturation"]->setFloat(m_saturation);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "saturation"), m_saturation);
       glUseProgram(0);
-#endif
     }
     if (ImGui::DragFloat("Brightness", &m_brightness, 0.01f, 0.0f, 100.0f, "%.2f", 2.0f))
     {
-#if USE_DENOISER
-      m_context["sysInvWhitePoint"]->setFloat(m_brightness / m_whitePoint);
-#else
       glUseProgram(m_glslProgram);
       glUniform1f(glGetUniformLocation(m_glslProgram, "invWhitePoint"), m_brightness / m_whitePoint);
       glUseProgram(0);
-#endif
     }
   }
   if (ImGui::CollapsingHeader("Materials"))
@@ -1347,12 +1314,6 @@ void Application::initPrograms()
     m_mapOfPrograms["raygeneration"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration"); // entry point 0
     m_mapOfPrograms["exception"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception"); // entry point 0
 
-#if USE_DENOISER
-    m_mapOfPrograms["raygeneration_tonemapper"] = m_context->createProgramFromPTXFile(ptxPath("raygeneration.cu"), "raygeneration_tonemapper"); // entry point 1
-    m_mapOfPrograms["exception_tonemapper"]     = m_context->createProgramFromPTXFile(ptxPath("exception.cu"), "exception_tonemapper"); // entry point 1
-#endif
-
-
     // There can be only one of the miss programs active.
     switch (m_missID)
     {
@@ -1539,7 +1500,8 @@ void Application::initMaterials()
   // Lambert material (for the floor)
   parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
   parameters.albedo              = optix::make_float3(0.5f); // Grey. (Modulates the albedo texture.)
-  parameters.useAlbedoTexture    = false;
+  //parameters.useAlbedoTexture    = false;
+  parameters.useAlbedoTexture    = true; // Enabled just to distinguish the resulting image from the non HDR DL Denoiser used in intro 09
   parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
   parameters.absorptionColor     = optix::make_float3(1.0f);

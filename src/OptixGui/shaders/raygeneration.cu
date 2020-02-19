@@ -40,7 +40,16 @@
 rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
 rtBuffer<float4, 2> sysAlbedoBuffer; // RGBA32F
+#if USE_DENOISER_NORMAL
+rtBuffer<float4, 2> sysNormalBuffer; // xyz0
+// For the denoiser normal transformation into camera space.
+rtDeclareVariable(float3, sysCameraU, , );
+rtDeclareVariable(float3, sysCameraV, , );
+rtDeclareVariable(float3, sysCameraW, , );
+#endif
+#endif
 #endif
 
 rtDeclareVariable(rtObject, sysTopObject, , );
@@ -56,14 +65,32 @@ rtBuffer< rtCallableProgramId<void(const float2 pixel, const float2 screen, cons
 rtDeclareVariable(uint2, theLaunchDim,   rtLaunchDim, );
 rtDeclareVariable(uint2, theLaunchIndex, rtLaunchIndex, );
 
-RT_FUNCTION void integrator(PerRayData& prd, float3& radiance, float3& albedo)
+RT_FUNCTION void integrator(PerRayData& prd, float3& radiance
+#if USE_DENOISER
+#if USE_DENOISER_ALBEDO
+                           , float3& albedo
+#if USE_DENOISER_NORMAL
+                           , float3& normal
+#endif
+#endif
+#endif
+)
 {
   // This renderer supports nested volumes. Four levels is plenty enough for most cases.
   // The absorption coefficient and IOR of the volume the ray is currently inside.
   float4 absorptionStack[MATERIAL_STACK_SIZE]; // .xyz == absorptionCoefficient (sigma_a), .w == index of refraction
 
   radiance = make_float3(0.0f); // Start with black.
+
+#if USE_DENOISER
+#if USE_DENOISER_ALBEDO
   albedo   = make_float3(0.0f); // Start with black.
+#if USE_DENOISER_NORMAL
+  normal     = make_float3(0.0f); // Start with null vector.
+  prd.normal = make_float3(0.0f); // Start with null vector. Important if nothing is hit!
+#endif
+#endif
+#endif
 
   // case 0: Standard stochastic motion blur.
   float time = rng(prd.seed); // Set the time of this path to a random value in the range [0, 1).
@@ -132,11 +159,12 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance, float3& albedo)
     radiance += throughput * prd.radiance;
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
     // In physical terms, the albedo is a single color value approximating the ratio of radiant exitance to the irradiance under uniform lighting.
     // The albedo value can be approximated for simple materials by using the diffuse color of the first hit,
-    // or for layered materials by using a weighted sum of the individual BRDFs albedo values.
+    // or for layered materials by using a weighted sum of the individual BRDFs albedo values.
     // For some objects such as perfect mirrors, the quality of the result might be improved by using the albedo value of a subsequent hit instead.
-#if 1
+
     // When no albedo has been written before and the hit was diffuse or a light, write the albedo.
     // DAR This makes glass materials and motion blur on specular surfaces in the demo a little noisier,
     // but should definitely be used with high frequency textures behind transparent or around reflective materials.
@@ -145,16 +173,32 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance, float3& albedo)
       // The albedo buffer should contain the surface appearance under uniform lighting in linear color space in the range [0.0f, 1.0f].
       // Clamp the final albedo result to that range here, because it captured the radiance when hitting lights either directly or via specular events.
       albedo = optix::clamp(throughput * prd.albedo, 0.0f, 1.0f);
+
       prd.flags |= FLAG_ALBEDO; // This flag is persistent along the path and prevents that the albedo is written more than once.
     }
-#else
-    if (depth == 0) // Just write the albedo of the primary ray.
+
+#if USE_DENOISER_NORMAL
+    // The normal buffer is expected to contain the surface normals of the primary hit in camera space.
+    // The camera space is assumed to be right handed such that the camera is looking down
+    // the negative z-axis, and the up direction is along the y-axis. The x-axis points to the right.
+    if (depth == 0 && (prd.flags & FLAG_HIT)) // Miss event keeps the null-vector.
     {
-      albedo = optix::clamp(throughput * prd.albedo, 0.0f, 1.0f); // See comment above. Expects linear colors in the range [0.0f, 1.0f]
+      // Note the input sysCameraU|V|W vectors are unnormalized and build a left-handed coordinate system.
+      // They are also not necessarily perpendicular to each other, because the generic pinhole camera system
+      // would allow sheared projections, but that's not used on these OptiX introduction examples.
+
+      // Project the world space normal into camera space.
+      // Using the normalized camera basis vectors here as camera space to get consistent results
+      // independently of the UVW vector lengths.
+      // The end result looks like a normal map without scale and bias.
+      // Normals pointing at the camera position will be blue.
+      normal = make_float3( optix::dot(prd.normal, optix::normalize(sysCameraU)),
+                            optix::dot(prd.normal, optix::normalize(sysCameraV)),
+                           -optix::dot(prd.normal, optix::normalize(sysCameraW))); // Negative W to make it right-handed.
     }
 #endif
-
-#endif // USE_DENOISER
+#endif
+#endif
 
     // Path termination by miss shader or sample() routines.
     // If terminate is true, f_over_pdf and pdf might be undefined.
@@ -214,9 +258,27 @@ RT_PROGRAM void raygeneration()
   sysLensShader[sysCameraType](make_float2(theLaunchIndex), make_float2(theLaunchDim), rng2(prd.seed), prd.pos, prd.wi); // Calculate the primary ray with a lens shader program.
 
   float3 radiance;
-  float3 albedo;
 
-  integrator(prd, radiance, albedo); // In this case a unidirectional path tracer.
+#if USE_DENOISER
+#if USE_DENOISER_ALBEDO
+  float3 albedo;
+#if USE_DENOISER_NORMAL
+  float3 normal;
+#endif
+#endif
+#endif
+
+  // In this case a unidirectional path tracer.
+  integrator(prd, radiance
+#if USE_DENOISER
+#if USE_DENOISER_ALBEDO
+            , albedo
+#if USE_DENOISER_NORMAL
+            , normal
+#endif
+#endif
+#endif
+  );
 
 #if USE_DEBUG_EXCEPTIONS
   // DAR DEBUG Highlight numerical errors.
@@ -240,14 +302,26 @@ RT_PROGRAM void raygeneration()
   {
     if (0 < sysIterationIndex)
     {
-      float4 dst = sysOutputBuffer[theLaunchIndex];  // RGBA32F
-      sysOutputBuffer[theLaunchIndex] = optix::lerp(dst, make_float4(radiance, 1.0f), 1.0f / (float) (sysIterationIndex + 1));
+      const float t = 1.0f / (float) (sysIterationIndex + 1);
+
+      float3 dst = make_float3(sysOutputBuffer[theLaunchIndex]);  // RGBA32F
+      sysOutputBuffer[theLaunchIndex] = make_float4(optix::lerp(dst, radiance, t), 1.0f);
 
 #if USE_DENOISER
-      dst = sysAlbedoBuffer[theLaunchIndex];  // RGBA32F
-      sysAlbedoBuffer[theLaunchIndex] = optix::lerp(dst, make_float4(albedo, 1.0f), 1.0f / (float) (sysIterationIndex + 1));
+#if USE_DENOISER_ALBEDO
+      dst = make_float3(sysAlbedoBuffer[theLaunchIndex]);  // RGBA32F
+      sysAlbedoBuffer[theLaunchIndex] = make_float4(optix::lerp(dst, albedo, t), 1.0f);
+#if USE_DENOISER_NORMAL
+      dst = make_float3(sysNormalBuffer[theLaunchIndex]); // xyz0
+      dst = optix::lerp(dst, normal, t);
+      if (isNotNull(dst))
+      {
+        dst = optix::normalize(dst);
+      }
+      sysNormalBuffer[theLaunchIndex] = make_float4(dst, 0.0f);
 #endif
-
+#endif
+#endif
     }
     else
     {
@@ -256,63 +330,13 @@ RT_PROGRAM void raygeneration()
       sysOutputBuffer[theLaunchIndex] = make_float4(radiance, 1.0f);
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
       sysAlbedoBuffer[theLaunchIndex] = make_float4(albedo, 1.0f);
+#if USE_DENOISER_NORMAL
+      sysNormalBuffer[theLaunchIndex] = make_float4(normal, 0.0f);
 #endif
-
+#endif
+#endif
     }
   }
 }
-
-#if USE_DENOISER
-// OptiX 5.0.x needs at least one appendLaunch() in the post-processing CommandList or the denoiser will not trigger its memory allocations.
-// This is fixed in OptiX 5.1.0 which also supports HDR denoising directly, so that the tonemapper can be placed last again.
-// Put my own tonemapper from GLSL here to get the proper gamma corrected input into the denoiser.
-
-rtBuffer<float4, 2> sysTonemappedBuffer;
-
-rtDeclareVariable(float3, sysColorBalance, , );
-rtDeclareVariable(float,  sysInvGamma, , );
-rtDeclareVariable(float,  sysInvWhitePoint, , );
-rtDeclareVariable(float,  sysBurnHighlights, , );
-rtDeclareVariable(float,  sysCrushBlacks, , );
-rtDeclareVariable(float,  sysSaturation, , );
-
-RT_PROGRAM void raygeneration_tonemapper()
-{
-  const float3 hdrColor = make_float3(sysOutputBuffer[theLaunchIndex]);
-
-  float3 ldrColor = sysInvWhitePoint * sysColorBalance * hdrColor;
-  ldrColor *= (ldrColor * make_float3(sysBurnHighlights) + make_float3(1.0f)) / (ldrColor + make_float3(1.0f));
-
-  float luminance = optix::dot(ldrColor, make_float3(0.3f, 0.59f, 0.11f));
-  ldrColor = optix::lerp(make_float3(luminance), ldrColor, sysSaturation); // This can generate negative values for sysSaturation > 1.0f!
-  ldrColor = fmaxf(0.0f, ldrColor); // Prevent negative values.
-
-  luminance = optix::dot(ldrColor, make_float3(0.3f, 0.59f, 0.11f));
-  if (luminance < 1.0f)
-  {
-    const float3 crushed = powf(ldrColor, sysCrushBlacks);
-    ldrColor = optix::lerp(crushed, ldrColor, sqrtf(luminance));
-    ldrColor = fmaxf(0.0f, ldrColor); // Prevent negative values.
-  }
-  ldrColor = powf(ldrColor, sysInvGamma);
-
-#if USE_DEBUG_EXCEPTIONS
-  // DAR DEBUG Highlight numerical errors.
-  if (isnan(ldrColor.x) || isnan(ldrColor.y) || isnan(ldrColor.z))
-  {
-    ldrColor = make_float3(1000000.0f, 0.0f, 0.0f); // super red
-  }
-  else if (isinf(ldrColor.x) || isinf(ldrColor.y) || isinf(ldrColor.z))
-  {
-    ldrColor = make_float3(0.0f, 1000000.0f, 0.0f); // super green
-  }
-  else if (ldrColor.x < 0.0f || ldrColor.y < 0.0f || ldrColor.z < 0.0f)
-  {
-    ldrColor = make_float3(0.0f, 0.0f, 1000000.0f); // super blue
-  }
-#endif
-
-  sysTonemappedBuffer[theLaunchIndex] = make_float4(ldrColor, 1.0f);
-}
-#endif // USE_DENOISER

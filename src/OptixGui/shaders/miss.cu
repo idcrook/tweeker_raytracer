@@ -51,7 +51,9 @@ RT_PROGRAM void miss_environment_null()
   thePrd.radiance = make_float3(0.0f);
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
   thePrd.albedo   = make_float3(0.0f);
+#endif
 #endif
 
   thePrd.flags |= FLAG_TERMINATE;  // Not a light.
@@ -70,7 +72,9 @@ RT_PROGRAM void miss_environment_constant()
 #endif
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
   thePrd.albedo = make_float3(1.0f); // Constant white emission.
+#endif
 #endif
 
   thePrd.flags |= (FLAG_LIGHT | FLAG_TERMINATE);
@@ -106,7 +110,9 @@ RT_PROGRAM void miss_environment_mapping()
 #endif
 
 #if USE_DENOISER
+#if USE_DENOISER_ALBEDO
   thePrd.albedo = emission;
+#endif
 #endif
 
   thePrd.flags |= (FLAG_LIGHT | FLAG_TERMINATE);
