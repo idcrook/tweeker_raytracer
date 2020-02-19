@@ -34,6 +34,7 @@
 #include <optixu/optixpp_namespace.h>
 #include <optixu/optixu_math_namespace.h>
 #include <optixu/optixu_matrix_namespace.h>
+#include <optixu/optixu_quaternion_namespace.h>
 
 #include <algorithm>
 #include <cstring>
@@ -173,6 +174,8 @@ Application::Application(GLFWwindow* window,
   m_builder = std::string("Trbvh");
 
   m_cameraType = LENS_SHADER_PINHOLE;
+
+  m_shutterType = 0; // Stochastic
 
   m_frames = 0; // Samples per pixel. 0 == render forever.
 
@@ -504,6 +507,9 @@ void Application::initRenderer()
 
     // Lens shader selection.
     m_context["sysCameraType"]->setInt(m_cameraType);
+
+    // Camera shutter selection
+    m_context["sysShutterType"]->setInt(m_shutterType);
   }
   catch(optix::Exception& e)
   {
@@ -841,6 +847,11 @@ void Application::guiWindow()
     if (ImGui::Combo("Camera", (int*) &m_cameraType, "Pinhole\0Fisheye\0Spherical\0\0"))
     {
       m_context["sysCameraType"]->setInt(m_cameraType);
+      restartAccumulation();
+    }
+    if (ImGui::Combo("Shutter", &m_shutterType, "Stochastic\0Top to Bottom\0Bottom To Top\0Left To Right\0Right To Left\0\0"))
+    {
+      m_context["sysShutterType"]->setInt(m_shutterType);
       restartAccumulation();
     }
     if (ImGui::DragInt("Min Paths", &m_minPathLength, 1.0f, 0, 100))
@@ -1579,18 +1590,21 @@ void Application::createScene()
     ggSphere->setChildCount(1);
     ggSphere->setChild(0, giSphere);
 
-    float trafoSphere[16] =
+    // Implement linear motion blur via the Transform on the sphere.
+    float keysLinear[2 * 12] =
     {
-      1.0f, 0.0f, 0.0f, 0.0f,  // In the center, to the right of the box.
-      0.0f, 1.0f, 0.0f, 1.25f, // The sphere is modeled with radius 1.0f. Move it above the floor plane to show shadows.
+      1.0f, 0.0f, 0.0f, 0.0f,
+      0.0f, 1.0f, 0.0f, 1.25f,
       0.0f, 0.0f, 1.0f, 0.0f,
-      0.0f, 0.0f, 0.0f, 1.0f
-    };
-    optix::Matrix4x4 matrixSphere(trafoSphere);
 
+      1.0f, 0.0f, 0.0f, 0.0f,
+      0.0f, 1.0f, 0.0f, 1.25f,
+      0.0f, 0.0f, 1.0f, 2.5f  // Move 2.5f units in positive z-axis direction.
+    };
     optix::Transform trSphere = m_context->createTransform();
     trSphere->setChild(ggSphere);
-    trSphere->setMatrix(false, matrixSphere.getData(), matrixSphere.inverse().getData());
+    trSphere->setMotionKeys(2, RT_MOTIONKEYTYPE_MATRIX_FLOAT12, keysLinear);
+    trSphere->setMotionRange(0.0f, 1.0f); // Defaults.
 
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);
@@ -1613,18 +1627,27 @@ void Application::createScene()
     ggTorus->setChildCount(1);
     ggTorus->setChild(0, giTorus);
 
-    float trafoTorus[16] =
+    // Implement Scale-Rotation-Translation (SRT) motion blur on the torus.
+    // Move to the right, along the positive x-axis and roll around that axis by 180 degrees.
+
+    // Rotation angle is in degrees in the optixQuaternion class.
+    const optix::float3 axis = optix::make_float3(1.0f, 0.0f, 0.0f);
+    const optix::Quaternion quat0(axis,   0.0f);
+    const optix::Quaternion quat1(axis, 180.0f);
+
+    float keysSRT[2 * 16] =
     {
-      1.0f, 0.0f, 0.0f, 2.5f,  // Move it to the right of the sphere.
-      0.0f, 1.0f, 0.0f, 1.25f, // The torus has an outer radius of 0.5f. Move it above the floor plane.
-      0.0f, 0.0f, 1.0f, 0.0f,
-      0.0f, 0.0f, 0.0f, 1.0f
+      // Refer to the OptiX Programming Guide which explains what these 16 values per motion key are doing.
+      // All Geometries in this demo are modeled around the origin in object coordinates, which is the pivot point (px, py, pz) for the rotation.
+      //sx,   a,    b,    px,   sy,   c,    py,   sz,   pz,   qx,          qy,          qz,          qw,          tx,   ty,    tz
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, quat0.m_q.x, quat0.m_q.y, quat0.m_q.z, quat0.m_q.w, 2.5f, 1.25f, 0.0f,
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, quat1.m_q.x, quat1.m_q.y, quat1.m_q.z, quat1.m_q.w, 5.0f, 1.25f, 0.0f
     };
-    optix::Matrix4x4 matrixTorus(trafoTorus);
 
     optix::Transform trTorus = m_context->createTransform();
     trTorus->setChild(ggTorus);
-    trTorus->setMatrix(false, matrixTorus.getData(), matrixTorus.inverse().getData());
+    trTorus->setMotionKeys(2, RT_MOTIONKEYTYPE_SRT_FLOAT16, keysSRT);
+    trTorus->setMotionRange(0.0f, 1.0f); // Defaults.
 
     count = m_rootGroup->getChildCount();
     m_rootGroup->setChildCount(count + 1);

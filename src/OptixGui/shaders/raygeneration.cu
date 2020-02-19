@@ -44,6 +44,7 @@ rtDeclareVariable(float,    sysSceneEpsilon, , );
 rtDeclareVariable(int2,     sysPathLengths, , );
 rtDeclareVariable(int,      sysIterationIndex, , );
 rtDeclareVariable(int,      sysCameraType, , );
+rtDeclareVariable(int,      sysShutterType, , );
 
 // Bindless callable programs implementing different lens shaders.
 rtBuffer< rtCallableProgramId<void(const float2 pixel, const float2 screen, const float2 sample, float3& origin, float3& direction)> > sysLensShader;
@@ -58,6 +59,28 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
   float4 absorptionStack[MATERIAL_STACK_SIZE]; // .xyz == absorptionCoefficient (sigma_a), .w == index of refraction
 
   radiance = make_float3(0.0f); // Start with black.
+
+
+  // case 0: Standard stochastic motion blur.
+  float time = rng(prd.seed); // Set the time of this path to a random value in the range [0, 1).
+
+  switch (sysShutterType) // In case another camera shutter is active reuse that random value.
+  {
+    case 1: // Rolling shutter from top to bottom.
+      // Note that launchIndex (0, 0) is as the bottom left corner, which matches what OpenGL expects as texture orientation.
+      // Each row gets a different time plus some stochastic antialiasing on that line.
+      time = (float(theLaunchDim.y - 1 - theLaunchIndex.y) + time) / float(theLaunchDim.y);
+      break;
+    case 2: // Rolling shutter from bottom to top.
+      time = (float(theLaunchIndex.y) + time) / float(theLaunchDim.y);
+      break;
+    case 3: // Rolling shutter from left to right.
+      time = (float(theLaunchIndex.x) + time) / float(theLaunchDim.x);
+      break;
+    case 4: // Rolling shutter from right to left.
+      time = (float(theLaunchDim.x - 1 - theLaunchIndex.x) + time) / float(theLaunchDim.x);
+      break;
+  }
 
   float3 throughput = make_float3(1.0f); // The throughput for the next radiance, starts with 1.0f.
 
@@ -88,9 +111,10 @@ RT_FUNCTION void integrator(PerRayData& prd, float3& radiance)
       }
     }
 
-    // Note that the primary rays (or volume scattering miss cases) wouldn't noramlly offset the ray t_min by sysSceneEpsilon. Keep it simple here.
+    // Note that the primary rays (or volume scattering miss cases) wouldn't normally offset the ray t_min by sysSceneEpsilon. Keep it simple here.
     optix::Ray ray = optix::make_Ray(prd.pos, prd.wi, 0, sysSceneEpsilon, prd.distance);
-    rtTrace(sysTopObject, ray, prd);
+    // Note that this time defines the semantic variable rtCurrentTime in the other program domains.
+    rtTrace(sysTopObject, ray, time, prd);
 
     // This renderer supports nested volumes.
     if (prd.flags & FLAG_VOLUME)

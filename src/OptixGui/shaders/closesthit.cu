@@ -44,6 +44,7 @@ rtDeclareVariable(float,    sysSceneEpsilon, , );
 // Semantic variables.
 rtDeclareVariable(optix::Ray, theRay,                  rtCurrentRay, );
 rtDeclareVariable(float,      theIntersectionDistance, rtIntersectionDistance, );
+rtDeclareVariable(float,      theCurrentTime,          rtCurrentTime, );
 
 rtDeclareVariable(PerRayData, thePrd,                  rtPayload, );
 
@@ -147,7 +148,7 @@ RT_PROGRAM void closesthit()
         // Note that the sysSceneEpsilon is applied on both sides of the shadow ray [t_min, t_max] interval
         // to prevent self intersections with the actual light geometry in the scene!
         optix::Ray ray = optix::make_Ray(thePrd.pos, lightSample.direction, 1, sysSceneEpsilon, lightSample.distance - sysSceneEpsilon); // Shadow ray.
-        rtTrace(sysTopObject, ray, prdShadow);
+        rtTrace(sysTopObject, ray, theCurrentTime, prdShadow);
 
         thePrd.seed = prdShadow.seed; // Continue the RNG state!
 
