@@ -66,7 +66,9 @@ Application::Application(GLFWwindow* window,
                          const unsigned int stackSize,
                          const bool interop,
                          const bool light,
-                         const unsigned int miss)
+                         const unsigned int miss,
+                         std::string const& environment)
+
 : m_window(window)
 , m_width(width)
 , m_height(height)
@@ -75,6 +77,7 @@ Application::Application(GLFWwindow* window,
 , m_interop(interop)
 , m_light(light)
 , m_missID(miss)
+, m_environmentFilename(environment)
 
 {
 
@@ -161,6 +164,7 @@ Application::Application(GLFWwindow* window,
   m_minPathLength       = 2;    // Minimum path length after which Russian Roulette path termination starts.
   m_maxPathLength       = 10;   // Maximum path length. Crank it up a little to show nested materials.
   m_sceneEpsilonFactor  = 500;  // Factor on 1e-7 used to offset ray origins along the path to reduce self intersections.
+  m_environmentRotation = 0.0f; // Not rotated, default camera setup looks down the negative z-axis which is the center of this image.
 
   m_present         = false;  // Update once per second. (The first half second shows all frames to get some initial accumulation).
   m_presentNext     = true;
@@ -177,6 +181,7 @@ Application::Application(GLFWwindow* window,
   m_glslFS      = 0;
   m_glslProgram = 0;
 
+#if 1 // Tonemapper defaults
   m_gamma          = 2.2f;
   m_colorBalance   = optix::make_float3(1.0f, 1.0f, 1.0f);
   m_whitePoint     = 1.0f;
@@ -184,17 +189,15 @@ Application::Application(GLFWwindow* window,
   m_crushBlacks    = 0.2f;
   m_saturation     = 1.2f;
   m_brightness     = 0.8f;
-
-  // Neutral tonemapper settings.
-  // This sample begins with an Ambient Occlusion like rendering setup. Make sure the the image stays white.
-  // DAR DEBUG Neutral tonemapper settings.
-  //m_gamma          = 1.0f;
-  //m_colorBalance   = optix::make_float3(1.0f, 1.0f, 1.0f);
-  //m_whitePoint     = 1.0f;
-  //m_burnHighlights = 1.0f;
-  //m_crushBlacks    = 0.0f;
-  //m_saturation     = 1.0f;
-  //m_brightness     = 1.0f;
+#else // DAR DEBUG Neutral tonemapper settings.
+  m_gamma          = 1.0f;
+  m_colorBalance   = optix::make_float3(1.0f, 1.0f, 1.0f);
+  m_whitePoint     = 1.0f;
+  m_burnHighlights = 1.0f;
+  m_crushBlacks    = 0.0f;
+  m_saturation     = 1.0f;
+  m_brightness     = 1.0f;
+#endif
 
   m_guiState = GUI_STATE_NONE;
 
@@ -362,8 +365,6 @@ void Application::getSystemInformation()
 void Application::initOpenGL()
 {
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-  //glClear(GL_COLOR_BUFFER_BIT);
-  //glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
 
   glViewport(0, 0, m_width, m_height);
 
@@ -472,6 +473,7 @@ void Application::initRenderer()
     // Add context-global variables here.
     m_context["sysSceneEpsilon"]->setFloat(m_sceneEpsilonFactor * 1e-7f);
     m_context["sysPathLengths"]->setInt(m_minPathLength, m_maxPathLength);
+    m_context["sysEnvironmentRotation"]->setFloat(m_environmentRotation);
     m_context["sysIterationIndex"]->setInt(0); // With manual accumulation, 0 fills the buffer, accumulation starts at 1. On the VCA this variable is unused!
 
     // RT_BUFFER_INPUT_OUTPUT to support accumulation.
@@ -857,6 +859,11 @@ void Application::guiWindow()
       m_context["sysSceneEpsilon"]->setFloat(m_sceneEpsilonFactor * 1e-7f);
       restartAccumulation();
     }
+    if (ImGui::DragFloat("Env Rotation", &m_environmentRotation, 0.001f, 0.0f, 1.0f))
+    {
+      m_context["sysEnvironmentRotation"]->setFloat(m_environmentRotation);
+      restartAccumulation();
+    }
     if (ImGui::DragInt("Frames", &m_frames, 1.0f, 0, 10000))
     {
       if (m_frames != 0 && m_frames < m_iterationIndex) // If we already rendered more frames, start again.
@@ -933,13 +940,17 @@ void Application::guiWindow()
         {
           changed = true;
         }
+        if (ImGui::Checkbox("Use Albedo Texture", &parameters.useAlbedoTexture))
+        {
+          changed = true;
+        }
+        if (ImGui::Checkbox("Thin-Walled", &parameters.thinwalled)) // Set this to true when using cutout opacity!
+        {
+          changed = true;
+        }
         // Only show material parameters for the BSDFs which are affected.
         if (parameters.indexBSDF == INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION)
         {
-          if (ImGui::Checkbox("Thin-Walled", &parameters.thinwalled))
-          {
-            changed = true;
-          }
           if (ImGui::ColorEdit3("Absorption", (float*) &parameters.absorptionColor))
           {
             changed = true;
@@ -1140,6 +1151,9 @@ void Application::initPrograms()
     default:
       m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_constant"); // raytype 0
       break;
+    case 2:
+      m_mapOfPrograms["miss"] = m_context->createProgramFromPTXFile(ptxPath("miss.cu"), "miss_environment_mapping"); // raytype 0
+      break;
     }
 
     // Geometry
@@ -1150,8 +1164,10 @@ void Application::initPrograms()
     // For the radiance ray type 0:
     m_mapOfPrograms["closesthit"] = m_context->createProgramFromPTXFile(ptxPath("closesthit.cu"), "closesthit");
     m_mapOfPrograms["closesthit_light"] = m_context->createProgramFromPTXFile(ptxPath("closesthit_light.cu"), "closesthit_light");
+    m_mapOfPrograms["anyhit_cutout"]    = m_context->createProgramFromPTXFile(ptxPath("anyhit.cu"), "anyhit_cutout");
     // For the shadow ray type 1:
     m_mapOfPrograms["anyhit_shadow"]    = m_context->createProgramFromPTXFile(ptxPath("anyhit.cu"), "anyhit_shadow");        // Opaque
+    m_mapOfPrograms["anyhit_shadow_cutout"] = m_context->createProgramFromPTXFile(ptxPath("anyhit.cu"), "anyhit_shadow_cutout"); // Cutout opacity.
 
     // Now setup all buffers of bindless callable program IDs.
     // These are device side function tables which can be indexed at runtime without recompilation.
@@ -1235,6 +1251,11 @@ void Application::initPrograms()
       m_mapOfPrograms["sample_light_constant"] = prg;
       sampleLight[LIGHT_ENVIRONMENT] = prg->getId();
       break;
+    case 2:
+      prg = m_context->createProgramFromPTXFile(ptxPath("light_sample.cu"), "sample_light_environment");
+      m_mapOfPrograms["sample_light_environment"] = prg;
+      sampleLight[LIGHT_ENVIRONMENT] = prg->getId();
+      break;
     }
 
     // PERF Again, to optimize the kernel size this program would only be needed if there are parallelogram lights in the scene.
@@ -1266,6 +1287,8 @@ void Application::updateMaterialParameters()
 
     dst->indexBSDF = src.indexBSDF;
     dst->albedo     = src.albedo;
+    dst->albedoID   = (src.useAlbedoTexture) ? m_textureAlbedo.getId() : RT_TEXTURE_ID_NULL;
+    dst->cutoutID   = (src.useCutoutTexture) ? m_textureCutout.getId() : RT_TEXTURE_ID_NULL;
     dst->flags      = (src.thinwalled) ? FLAG_THINWALLED : 0;
     // Calculate the effective absorption coefficient from the GUI parameters. This is one reason why there are two structures.
     // Prevent logf(0.0f) which results in infinity.
@@ -1281,23 +1304,44 @@ void Application::updateMaterialParameters()
 
 void Application::initMaterials()
 {
-  // Setup GUI material parameters, one for each of the objects in the scene.
+  Picture* picture = new Picture;
+
+  std::string textureFilename = std::string(sutil::samplesDir()) + "/data/NVIDIA_Logo.jpg";
+  //std::cerr << "textureFilename " << textureFilename << std::endl;
+  picture->load(textureFilename);
+  m_textureAlbedo.createSampler(m_context, picture);
+
+  textureFilename = std::string(sutil::samplesDir()) + "/data/slots_alpha.png";
+  picture->load(textureFilename);
+  m_textureCutout.createSampler(m_context, picture);
+
+  delete picture;
+
+  // Setup GUI material parameters, one for each of the implemented BSDFs.
+  // Cutout opacity is not an option which can be switched dynamically in this demo.
+  // That would require to use the anyhit cutout version for all materials which is a performance impact.
+  // Currently only the object which uses this material parameter instance has the cutout opacity assigned.
+
   MaterialParameterGUI parameters;
 
   // Lambert material for the floor.
   parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(0.25f); // Dark grey.
-  parameters.thinwalled          = true;
+  parameters.albedo              = optix::make_float3(0.5f); // Grey. Modulates the albedo texture.
+  parameters.useAlbedoTexture    = true;
+  parameters.useCutoutTexture    = false;
+  parameters.thinwalled          = false;
   parameters.absorptionColor     = optix::make_float3(1.0f);
   parameters.volumeDistanceScale = 1.0f;
   parameters.ior                 = 1.5f;
   m_guiMaterialParameters.push_back(parameters); // 0
 
-  // Glass material for the box.
+  // Water material for the box.
   parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
   parameters.albedo              = optix::make_float3(1.0f);
+  parameters.useAlbedoTexture    = false;
+  parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.8f, 0.8f, 0.9f); // Light blue
+  parameters.absorptionColor     = optix::make_float3(0.75f, 0.75f, 0.95f); // Blue
   parameters.volumeDistanceScale = 1.0f;
   parameters.ior                 = 1.33f; // Water
   m_guiMaterialParameters.push_back(parameters); // 1
@@ -1305,24 +1349,32 @@ void Application::initMaterials()
   // Glass material for the sphere inside that box to show nested materials!
   parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION_TRANSMISSION; // Index into sysSampleBSDF and sysEvalBSDF.
   parameters.albedo              = optix::make_float3(1.0f);
+  parameters.useAlbedoTexture    = false;
+  parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.6f, 0.9f, 0.6f); // Green.
+  parameters.absorptionColor     = optix::make_float3(0.5f, 0.75f, 0.5f); // Green
   parameters.volumeDistanceScale = 1.0f;
-  parameters.ior                 = 1.5f; // Glass. Higher IOR than the surrounding box.
+  parameters.ior                 = 1.52f; // Flint glass. Higher IOR than the surrounding box.
   m_guiMaterialParameters.push_back(parameters); // 2
 
-  // Lambert material.
+  // Lambert material with cutout opacity.
   parameters.indexBSDF           = INDEX_BSDF_DIFFUSE_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(1.0f);
-  parameters.thinwalled          = false;
-  parameters.absorptionColor     = optix::make_float3(0.980392f, 0.729412f, 0.470588f);
+  parameters.albedo              = optix::make_float3(0.75f); // optix::make_float3(0.980392f, 0.729412f, 0.470588f);
+  parameters.useAlbedoTexture    = false;
+  // Note that this is a one time initialization in this demo, for performance reasons.
+  // Materials without cutout opacity do not need an anyhit program on the radiance ray type which is faster.
+  parameters.useCutoutTexture    = true;
+  parameters.thinwalled          = true; // Materials with cutout opacity should always be thinwalled.
+  parameters.absorptionColor     = optix::make_float3(0.980392f, 0.729412f, 0.470588f); // optix::make_float3(0.462745f, 0.72549f, 0.0f);
   parameters.volumeDistanceScale = 1.0f;
   parameters.ior                 = 1.5f; // Glass.
   m_guiMaterialParameters.push_back(parameters); // 3
 
-  // Tinted mirror material
+  // Tinted mirror material.
   parameters.indexBSDF           = INDEX_BSDF_SPECULAR_REFLECTION; // Index into sysSampleBSDF and sysEvalBSDF.
-  parameters.albedo              = optix::make_float3(0.980392f, 0.729412f, 0.470588f); // optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  parameters.albedo              = optix::make_float3(0.462745f, 0.72549f, 0.0f);
+  parameters.useAlbedoTexture    = false;
+  parameters.useCutoutTexture    = false;
   parameters.thinwalled          = false;
   parameters.absorptionColor     = optix::make_float3(0.9f, 0.8f, 0.8f); // Light red.
   parameters.volumeDistanceScale = 1.0f;
@@ -1339,7 +1391,7 @@ void Application::initMaterials()
 
     m_context["sysMaterialParameters"]->setBuffer(m_bufferMaterialParameters);
 
-    // Create the two main Material nodes to have the matching closest hit and any hit programs.
+    // Create the three main Material nodes to have the matching closest hit and any hit programs.
 
     std::map<std::string, optix::Program>::const_iterator it;
 
@@ -1352,6 +1404,20 @@ void Application::initMaterials()
     it = m_mapOfPrograms.find("anyhit_shadow");
     MY_ASSERT(it != m_mapOfPrograms.end());
     m_opaqueMaterial->setAnyHitProgram(1, it->second); // raytype shadow
+
+    // Used for all materials with cutout opacity.
+    m_cutoutMaterial = m_context->createMaterial();
+    it = m_mapOfPrograms.find("closesthit");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_cutoutMaterial->setClosestHitProgram(0, it->second); // raytype radiance
+
+    it = m_mapOfPrograms.find("anyhit_cutout");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_cutoutMaterial->setAnyHitProgram(0, it->second); // raytype radiance
+
+    it = m_mapOfPrograms.find("anyhit_shadow_cutout");
+    MY_ASSERT(it != m_mapOfPrograms.end());
+    m_cutoutMaterial->setAnyHitProgram(1, it->second); // raytype shadow
 
     // Used for all geometric lights.
     m_lightMaterial = m_context->createMaterial();
@@ -1368,7 +1434,6 @@ void Application::initMaterials()
     std::cerr << e.getErrorString() << std::endl;
   }
 }
-
 
 // Scene testing all materials on a single geometry instanced via transforms and sharing one acceleration structure.
 void Application::createScene()
@@ -1397,8 +1462,8 @@ void Application::createScene()
     optix::GeometryInstance giPlane = m_context->createGeometryInstance(); // This connects Geometries with Materials.
     giPlane->setGeometry(geoPlane);
     giPlane->setMaterialCount(1);
-    giPlane->setMaterial(0, m_opaqueMaterial);
-    giPlane["parMaterialIndex"]->setInt(0);
+    giPlane->setMaterial(0, (m_guiMaterialParameters[0].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
+    giPlane["parMaterialIndex"]->setInt(0); // This is all! This defines which material parameters in sysMaterialParameters to use.
 
     optix::Acceleration accPlane = m_context->createAcceleration(m_builder);
     setAccelerationProperties(accPlane);
@@ -1432,7 +1497,7 @@ void Application::createScene()
     optix::GeometryInstance giBox = m_context->createGeometryInstance();
     giBox->setGeometry(geoBox);
     giBox->setMaterialCount(1);
-    giBox->setMaterial(0, m_opaqueMaterial);
+    giBox->setMaterial(0, (m_guiMaterialParameters[1].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
     giBox["parMaterialIndex"]->setInt(1); // Using parameters in sysMaterialParameters[1].
 
     optix::Acceleration accBox = m_context->createAcceleration(m_builder);
@@ -1468,7 +1533,7 @@ void Application::createScene()
     optix::GeometryInstance giNested = m_context->createGeometryInstance();
     giNested->setGeometry(geoNested);
     giNested->setMaterialCount(1);
-    giNested->setMaterial(0, m_opaqueMaterial);
+    giNested->setMaterial(0, (m_guiMaterialParameters[2].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
     giNested["parMaterialIndex"]->setInt(2); // Using parameters in sysMaterialParameters[2].
 
     optix::Acceleration accNested = m_context->createAcceleration(m_builder);
@@ -1504,7 +1569,7 @@ void Application::createScene()
     optix::GeometryInstance giSphere = m_context->createGeometryInstance();
     giSphere->setGeometry(geoSphere);
     giSphere->setMaterialCount(1);
-    giSphere->setMaterial(0, m_opaqueMaterial);
+    giSphere->setMaterial(0, (m_guiMaterialParameters[3].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
     giSphere["parMaterialIndex"]->setInt(3); // Using parameters in sysMaterialParameters[3].
 
     optix::Acceleration accSphere = m_context->createAcceleration(m_builder);
@@ -1538,7 +1603,7 @@ void Application::createScene()
     optix::GeometryInstance giTorus = m_context->createGeometryInstance();
     giTorus->setGeometry(geoTorus);
     giTorus->setMaterialCount(1);
-    giTorus->setMaterial(0, m_opaqueMaterial);
+    giTorus->setMaterial(0, (m_guiMaterialParameters[4].useCutoutTexture) ? m_cutoutMaterial : m_opaqueMaterial);
     giTorus["parMaterialIndex"]->setInt(4); // Using parameters in sysMaterialParameters[4].
 
     optix::Acceleration accTorus = m_context->createAcceleration(m_builder);
@@ -1604,6 +1669,11 @@ void Application::createLights()
   light.normal   = optix::make_float3(0.0f, 0.0f, 1.0f);
   light.area     = 1.0f;
   light.emission = optix::make_float3(1.0f, 1.0f, 1.0f);
+  // Fields with bindless texture and buffer IDs and the integral for a spherical environment map.
+  light.idEnvironmentTexture = RT_TEXTURE_ID_NULL;
+  light.environmentIntegral  = 1.0f;
+  light.idEnvironmentCDF_U   = RT_BUFFER_ID_NULL;
+  light.idEnvironmentCDF_V   = RT_BUFFER_ID_NULL;
 
   // The environment light is expected in sysLightDefinitions[0]!
   // All other lights are indexed by their position inside the array.
@@ -1619,6 +1689,31 @@ void Application::createLights()
 
     m_lightDefinitions.push_back(light);
     break;
+
+  case 2: // HDR Environment mapping with loaded texture.
+    {
+      Picture* picture = new Picture; // Separating image file handling from OptiX texture handling.
+      picture->load(m_environmentFilename);
+
+      m_environmentTexture.createEnvironment(picture);
+
+      delete picture;
+
+      // Generate the CDFs for direct environment lighting and the environment texture sampler itself.
+      m_environmentTexture.calculateCDF(m_context);
+    }
+
+    light.type = LIGHT_ENVIRONMENT;
+    light.area = 4.0f * M_PIf; // Unused.
+
+    // Set the bindless texture and buffer IDs inside the LightDefinition.
+    light.idEnvironmentTexture = m_environmentTexture.getId();
+    light.idEnvironmentCDF_U   = m_environmentTexture.getBufferCDF_U()->getId();
+    light.idEnvironmentCDF_V   = m_environmentTexture.getBufferCDF_V()->getId();
+    light.environmentIntegral  = m_environmentTexture.getIntegral(); // DAR PERF Could bake the factor 2.0f * M_PIf * M_PIf into the sysEnvironmentIntegral here.
+
+    m_lightDefinitions.push_back(light);
+    break;
   }
 
   if (m_light)  // Add a square area light over the scene objects.
@@ -1628,7 +1723,7 @@ void Application::createLights()
     light.vecU      = optix::make_float3(1.0f, 0.0f, 0.0f);   // To the right.
     light.vecV      = optix::make_float3(0.0f, 0.0f, 1.0f);   // To the front.
     optix::float3 n = optix::cross(light.vecU, light.vecV);   // Length of the cross product is the area.
-    light.area     = optix::length(n);                        // Calculate the world space area of that rectangle. (25 m^2)
+    light.area     = optix::length(n);                        // Calculate the world space area of that rectangle. unit is [m^2]
     light.normal   = n / light.area;                          // Normalized normal
     light.emission = optix::make_float3(100.0f);              // Radiant exitance in Watt/m^2.
 

@@ -70,6 +70,7 @@ struct State
 {
   optix::float3 geoNormal;
   optix::float3 normal;
+  optix::float3 texcoord;
 };
 
 // Note that the fields are ordered by CUDA alignment restrictions.
@@ -91,12 +92,14 @@ struct PerRayData
   float         pdf;            // The last BSDF sample's pdf, tracked for multiple importance sampling.
 
   optix::float3 extinction;     // The current volume's extinction coefficient. (Only absorption in this implementation.)
+  float         opacity;       // Cutout opacity result
 
   unsigned int  seed;           // Random number generator input.
 };
 
 struct PerRayData_shadow
 {
+  unsigned int  seed;
   bool visible;
 };
 

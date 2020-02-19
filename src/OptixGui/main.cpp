@@ -37,8 +37,8 @@
 #define GUI_WINDOW_DEFAULT_STARTING_Ny  ( 720)
 
 #define NOptix_Stack_Size_DEFAULT       (1024)
-#define NMiss_Shader_DEFAULT            (1)
-#define NMiss_Shader_MAX                (1)    // Range [0 .. NMiss_Shader_MAX]
+#define NMiss_Shader_DEFAULT            (2)
+#define NMiss_Shader_MAX                (2)    // Range [0 .. NMiss_Shader_MAX]
 
 static Application* g_app = nullptr;
 
@@ -69,7 +69,8 @@ App Options:
     "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."  << std::endl <<
     "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
     "  -l | --light         Add an area light to the scene. "                  << std::endl <<
-    "  -m | --miss  <0|1>   Select the miss shader (0 = black, 1 = white). (default: "   << NMiss_Shader_DEFAULT << ')' << std::endl <<
+    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: "   << NMiss_Shader_DEFAULT << ')' << std::endl <<
+    "  -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << "" << ')' << std::endl <<
     "  -k | --stack <int>   Set the OptiX stack size (1024) (debug feature). (default: " << NOptix_Stack_Size_DEFAULT << ')' << std::endl <<
     "";
 
@@ -104,9 +105,9 @@ int main(int argc, char* argv[])
   int  devices      = 3210;  // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
   bool interop      = true;  // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
   bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
-  int  miss         = NMiss_Shader_DEFAULT; // Select the environment light (0 = black, no light; 1 = constant white environment; 3 = spherical environment texture.
+  int  miss         = NMiss_Shader_DEFAULT; // Select the environment light (0 = black, no light; 1 = constant white environment; 2 = spherical environment texture.
   int  stackSize    = NOptix_Stack_Size_DEFAULT ;  // Command line parameter just to be able to find the smallest working size.
-  //std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
+  std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
 
   std::string filenameScreenshot;
   bool hasGUI = true;
@@ -323,6 +324,20 @@ int main(int argc, char* argv[])
   }
 
   sameOptionList.clear();
+  sameOptionList.push_back("-i");  sameOptionList.push_back("--env");
+  const std::string &envImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!envImageFile.empty()) {
+      environment = envImageFile;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid filename (--env): " << envImageFile << std::endl;
+    std::exit ( EXIT_FAILURE );
+  }
+
+
+  sameOptionList.clear();
   sameOptionList.push_back("-f");  sameOptionList.push_back("--file");
   const std::string &outputImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
   try {
@@ -428,11 +443,8 @@ int main(int argc, char* argv[])
   ilInit(); // Initialize DevIL once.
 
   // start our Application context
-  // g_app = new Application(window, windowWidth, windowHeight,
-  //                         devices, stackSize, interop, light, miss, environment);
-
   g_app = new Application(window, windowWidth, windowHeight,
-                          devices, stackSize, interop, light, miss);
+                          devices, stackSize, interop, light, miss, environment);
 
   if (!g_app->isValid())
   {
@@ -463,8 +475,7 @@ int main(int argc, char* argv[])
 
       g_app->guiEventHandler(); // Currently only reacting on SPACE to toggle the GUI window.
 
-      g_app->render();  // OptiX rendering and OpenGL texture update. // Unknown error (Details: Function "RTresult _rtContextLaunch2D(RTcontext, unsigned int, RTsize, RTsize)" caught exception: Assertion failed: "!m_enteredFromAPI : Memory manager already entered from API", file: <internal>, line: 1097) //       //m_context->launch(0, m_width, m_height);
-
+      g_app->render();  // OptiX rendering and OpenGL texture update.
       g_app->display(); // OpenGL display. // ERROR 1282 in glEnd
 
 
@@ -493,6 +504,11 @@ int main(int argc, char* argv[])
   ImGui::DestroyContext();
 
   glfwDestroyWindow(window);
+
+  ilShutDown();
+
+  //delete g_app;
+
   glfwTerminate();
 
   std::exit ( EXIT_SUCCESS);

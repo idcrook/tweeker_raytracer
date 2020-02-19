@@ -51,7 +51,7 @@ rtDeclareVariable(PerRayData, thePrd,                  rtPayload, );
 rtDeclareVariable(optix::float3, varGeoNormal, attribute GEO_NORMAL, );
 //rtDeclareVariable(optix::float3, varTangent,   attribute TANGENT, );
 rtDeclareVariable(optix::float3, varNormal,    attribute NORMAL, );
-//rtDeclareVariable(optix::float3, varTexCoord,  attribute TEXCOORD, );
+rtDeclareVariable(optix::float3, varTexCoord,  attribute TEXCOORD, );
 
 // Material parameter definition.
 rtBuffer<MaterialParameter> sysMaterialParameters; // Context global buffer with an array of structures of MaterialParameter.
@@ -71,6 +71,7 @@ RT_PROGRAM void closesthit()
 
   state.geoNormal = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varGeoNormal));
   state.normal    = optix::normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, varNormal));
+  state.texcoord  = varTexCoord;
 
   thePrd.pos      = theRay.origin + theRay.direction * theIntersectionDistance; // Advance the path to the hit position in world coordinates.
   thePrd.distance = theIntersectionDistance; // Return the current path segment distance, needed for absorption calculations in the integrator.
@@ -94,7 +95,16 @@ RT_PROGRAM void closesthit()
   // But since only parallelogram area lights are supported, those get a dedicated closest hit program to simplify this demo.
   thePrd.radiance = make_float3(0.0f);
 
-  MaterialParameter parameters = sysMaterialParameters[parMaterialIndex];
+  MaterialParameter parameters = sysMaterialParameters[parMaterialIndex]; // Copy the material parameters locally to be able to fetch texture data once.
+
+  if (parameters.albedoID != RT_TEXTURE_ID_NULL)
+  {
+    const float3 texColor = make_float3(optix::rtTex2D<float4>(parameters.albedoID, state.texcoord.x, state.texcoord.y));
+
+    // Modulate the incoming color with the texture.
+    parameters.albedo *= texColor;               // linear color, resp. if the texture has been uint8 and readmode set to use sRGB, then sRGB.
+    //parameters.albedo *= powf(texColor, 2.2f); // sRGB gamma correction done manually.
+  }
 
   // Start fresh with the next BSDF sample.  (Either of these values remaining zero is an end-of-path condition.)
   thePrd.f_over_pdf = make_float3(0.0f);
@@ -131,12 +141,15 @@ RT_PROGRAM void closesthit()
         // Do the visibility check of the light sample.
         PerRayData_shadow prdShadow;
 
-        prdShadow.visible = true; // Initialize for miss.
+        prdShadow.seed    = thePrd.seed; // For potential stochastic cutout opacity sampling.
+        prdShadow.visible = true;        // Initialize for miss.
 
         // Note that the sysSceneEpsilon is applied on both sides of the shadow ray [t_min, t_max] interval
         // to prevent self intersections with the actual light geometry in the scene!
         optix::Ray ray = optix::make_Ray(thePrd.pos, lightSample.direction, 1, sysSceneEpsilon, lightSample.distance - sysSceneEpsilon); // Shadow ray.
         rtTrace(sysTopObject, ray, prdShadow);
+
+        thePrd.seed = prdShadow.seed; // Continue the RNG state!
 
         if (prdShadow.visible)
         {

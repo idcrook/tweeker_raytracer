@@ -41,6 +41,8 @@
 rtBuffer<LightDefinition> sysLightDefinitions;
 rtDeclareVariable(int,    sysNumLights, , ); // PERF Used many times and faster to read than sysLightDefinitions.size().
 
+rtDeclareVariable(float,  sysEnvironmentRotation, , );
+
 
 RT_FUNCTION void unitSquareToSphere(const float u, const float v, float3& p, float& pdf)
 {
@@ -66,6 +68,89 @@ RT_CALLABLE_PROGRAM void sample_light_constant(float3 const& point, const float2
 
   // Explicit light sample. White scaled by inverse probabilty to hit this light.
   lightSample.emission = make_float3(sysNumLights);
+}
+
+RT_CALLABLE_PROGRAM void sample_light_environment(float3 const& point, const float2 sample, LightSample& lightSample)
+{
+  const LightDefinition light = sysLightDefinitions[0]; // The environment light is always placed into the first entry.
+
+  // Importance-sample the spherical environment light direction.
+  const unsigned int sizeU = static_cast<unsigned int>(light.idEnvironmentCDF_U.size().x);
+  const unsigned int sizeV = static_cast<unsigned int>(light.idEnvironmentCDF_V.size());
+
+  unsigned int ilo = 0;          // Use this for full spherical lighting. (This matches the result of indirect environment lighting.)
+  unsigned int ihi = sizeV - 1 ; // Index on the last entry containing 1.0f. Can never be reached with the sample in the range [0.0f, 1.0f).
+
+  // Binary search the row index to look up.
+  while (ilo != ihi - 1) // When a pair of limits have been found, the lower index indicates the cell to use.
+  {
+    const unsigned int i = (ilo + ihi) >> 1;
+    const float cdf = light.idEnvironmentCDF_V[i];
+    if (sample.y < cdf) // If the cdf is greater than the sample, use that as new higher limit.
+    {
+      ihi = i;
+    }
+    else // If the sample is greater than or equal to the CDF value, use that as new lower limit.
+    {
+      ilo = i;
+    }
+  }
+
+  uint2 index; // 2D index used in the next binary search.
+  index.y = ilo; // This is the row we found.
+
+  // Binary search the column index to look up.
+  ilo = 0;
+  ihi = sizeU - 1; // Index on the last entry containing 1.0f. Can never be reached with the sample in the range [0.0f, 1.0f).
+  while (ilo != ihi - 1) // When a pair of limits have been found, the lower index indicates the cell to use.
+  {
+    index.x = (ilo + ihi) >> 1;
+    const float cdf = light.idEnvironmentCDF_U[index];
+    if (sample.x < cdf) // If the CDF value is greater than the sample, use that as new higher limit.
+    {
+      ihi = index.x;
+    }
+    else // If the sample is greater than or equal to the CDF value, use that as new lower limit.
+    {
+      ilo = index.x;
+    }
+  }
+
+  index.x = ilo; // The column result.
+
+  // Continuous sampling of the CDF.
+  const float cdfLowerU = light.idEnvironmentCDF_U[index];
+  const float cdfUpperU = light.idEnvironmentCDF_U[make_uint2(index.x + 1, index.y)];
+  const float du = (sample.x - cdfLowerU) / (cdfUpperU - cdfLowerU);
+
+  const float cdfLowerV = light.idEnvironmentCDF_V[index.y];
+  const float cdfUpperV = light.idEnvironmentCDF_V[index.y + 1];
+  const float dv = (sample.y - cdfLowerV) / (cdfUpperV - cdfLowerV);
+
+  // Texture lookup coordinates.
+  const float u = (float(index.x) + du) / float(sizeU - 1);
+  const float v = (float(index.y) + dv) / float(sizeV - 1);
+
+  // Light sample direction vector polar coordinates. This is where the environment rotation happens!
+  // DAR FIXME Use a light.matrix to rotate the resulting vector instead.
+  const float phi   = (u - sysEnvironmentRotation) * 2.0f * M_PIf;
+  const float theta = v * M_PIf; // theta == 0.0f is south pole, theta == M_PIf is north pole.
+
+  const float sinTheta = sinf(theta);
+  // The miss program places the 1->0 seam at the positive z-axis and looks from the inside.
+  lightSample.direction = make_float3(-sinf(phi) * sinTheta,  // Starting on positive z-axis going around clockwise (to negative x-axis).
+                                      -cosf(theta),           // From south pole to north pole.
+                                       cosf(phi) * sinTheta); // Starting on positive z-axis.
+
+  // Note that environment lights do not set the light sample position!
+  lightSample.distance = RT_DEFAULT_MAX; // Environment light.
+
+  const float3 emission = make_float3(optix::rtTex2D<float4>(light.idEnvironmentTexture, u, v));
+  // Explicit light sample. The returned emission must be scaled by the inverse probability to select this light.
+  lightSample.emission = emission * sysNumLights;
+  // For simplicity we pretend that we perfectly importance-sampled the actual texture-filtered environment map
+  // and not the Gaussian-smoothed one used to actually generate the CDFs and uniform sampling in the texel.
+  lightSample.pdf = intensity(emission) / light.environmentIntegral;
 }
 
 

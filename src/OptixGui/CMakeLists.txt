@@ -32,18 +32,6 @@ set(CMAKE_MODULE_PATH
 
 #message(STATUS "CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}")
 
-# for local source includes and devil
-INCLUDE_DIRECTORIES(
-  "."
-  # "include"
-  ${IL_INCLUDE_DIR}
-  )
-
-# # Tells CMake to build all the libraries as shared libraries by default.  This can be
-# # overrided by individual libraries later.
-# set(BUILD_SHARED_LIBS ON)
-
-
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
 
@@ -79,6 +67,16 @@ find_package(DevIL REQUIRED)
 if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
   include_directories( ${OPENGL_INCLUDE_DIR} )
 endif()
+
+# for local source includes and devil
+INCLUDE_DIRECTORIES(
+  "."
+  ${IL_INCLUDE_DIR}
+  )
+
+# # Tells CMake to build all the libraries as shared libraries by default.  This can be
+# # overrided by individual libraries later.
+# set(BUILD_SHARED_LIBS ON)
 
 ##################################################################
 # CUDA config
@@ -225,8 +223,14 @@ OPTIX_add_sample_executable( optixGui
 
   include/LensShader.h
 
+  include/Picture.h
+  Picture.cpp
+
   include/PinholeCamera.h
   PinholeCamera.cpp
+
+  include/Texture.h
+  Texture.cpp
 
   include/Timer.h
   Timer.cpp

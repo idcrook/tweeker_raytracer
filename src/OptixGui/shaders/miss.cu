@@ -66,3 +66,35 @@ RT_PROGRAM void miss_environment_constant()
 
   thePrd.flags |= FLAG_TERMINATE;
 }
+
+RT_PROGRAM void miss_environment_mapping()
+{
+  const LightDefinition light = sysLightDefinitions[0];
+
+  const float3 R = theRay.direction;
+  // The seam u == 0.0 == 1.0 is in positive z-axis direction.
+  // Compensate for the environment rotation done inside the direct lighting.
+  const float u     = (atan2f(R.x, -R.z) + M_PIf) * 0.5f * M_1_PIf + sysEnvironmentRotation; // DAR FIXME Use a light.matrix to rotate the environment.
+  const float theta = acosf(-R.y);     // theta == 0.0f is south pole, theta == M_PIf is north pole.
+  const float v     = theta * M_1_PIf; // Texture is with origin at lower left, v == 0.0f is south pole.
+
+  const float3 emission = make_float3(optix::rtTex2D<float4>(light.idEnvironmentTexture, u, v));
+
+#if USE_NEXT_EVENT_ESTIMATION
+  float weightMIS = 1.0f;
+  // If the last surface intersection was a diffuse event which was directly lit with multiple importance sampling,
+  // then calculate light emission with multiple importance sampling for this implicit light hit as well.
+  if (thePrd.flags & FLAG_DIFFUSE)
+  {
+    // For simplicity we pretend that we perfectly importance-sampled the actual texture-filtered environment map
+    // and not the Gaussian smoothed one used to actually generate the CDFs.
+    const float pdfLight = intensity(emission) / light.environmentIntegral;
+    weightMIS = powerHeuristic(thePrd.pdf, pdfLight);
+  }
+  thePrd.radiance = emission * weightMIS;
+#else
+  thePrd.radiance = emission;
+#endif
+
+  thePrd.flags |= FLAG_TERMINATE;
+}

@@ -26,17 +26,76 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
 #include "app_config.cuh"
 
 #include <optix.h>
+#include <optixu/optixu_math_namespace.h>
 
+#include "rt_function.cuh"
+#include "material_parameter.cuh"
 #include "per_ray_data.cuh"
+#include "shader_common.cuh"
 
+rtDeclareVariable(optix::Ray, theRay,                  rtCurrentRay, );
+rtDeclareVariable(float,      theIntersectionDistance, rtIntersectionDistance, );
+
+rtDeclareVariable(PerRayData,        thePrd,       rtPayload, );
 rtDeclareVariable(PerRayData_shadow, thePrdShadow, rtPayload, );
+
+// Attributes.
+//rtDeclareVariable(optix::float3, varGeoNormal, attribute GEO_NORMAL, );
+//rtDeclareVariable(optix::float3, varTangent,   attribute TANGENT, );
+//rtDeclareVariable(optix::float3, varNormal,    attribute NORMAL, );
+rtDeclareVariable(optix::float3, varTexCoord,  attribute TEXCOORD, );
+
+// Material parameter definition.
+rtBuffer<MaterialParameter> sysMaterialParameters; // Context global buffer with an array of structures of MaterialParameter.
+rtDeclareVariable(int,      parMaterialIndex, , ); // Per Material index into the above sysMaterialParameters array.
+
+
+// One anyhit program for the radiance ray for all materials with cutout opacity!
+RT_PROGRAM void anyhit_cutout() // For the radiance ray type.
+{
+  float opacity = 1.0f;
+  const int id = sysMaterialParameters[parMaterialIndex].cutoutID; // Fetch the bindless texture ID for cutout opacity.
+  if (id != RT_TEXTURE_ID_NULL)
+  {
+    opacity = intensity(make_float3(optix::rtTex2D<float4>(id, varTexCoord.x, varTexCoord.y))); // RGB intensity defines the opacity. White is opaque.
+  }
+
+  // Stochastic alpha test to get an alpha blend effect.
+  if (opacity < 1.0f && opacity <= rng(thePrd.seed)) // No need to calculate an expensive random number if the test is going to fail anyway.
+  {
+    rtIgnoreIntersection();
+  }
+}
+
 
 // The shadow ray program for all materials with no cutout opacity.
 RT_PROGRAM void anyhit_shadow()
 {
   thePrdShadow.visible = false;
   rtTerminateRay();
+}
+
+RT_PROGRAM void anyhit_shadow_cutout() // For the shadow ray type.
+{
+  float opacity = 1.0f;
+  const int id = sysMaterialParameters[parMaterialIndex].cutoutID; // Fetch the bindless texture ID for cutout opacity.
+  if (id != RT_TEXTURE_ID_NULL)
+  {
+    opacity = intensity(make_float3(optix::rtTex2D<float4>(id, varTexCoord.x, varTexCoord.y))); // RGB intensity defines the opacity. White is opaque.
+  }
+
+  // Stochastic alpha test to get an alpha blend effect.
+  if (opacity < 1.0f && opacity <= rng(thePrdShadow.seed)) // No need to calculate an expensive random number if the test is going to fail anyway.
+  {
+    rtIgnoreIntersection();
+  }
+  else
+  {
+    thePrdShadow.visible = false;
+    rtTerminateRay();
+  }
 }

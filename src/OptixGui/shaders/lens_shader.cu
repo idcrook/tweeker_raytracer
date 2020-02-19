@@ -35,8 +35,6 @@
 #include "per_ray_data.cuh"
 #include "rt_assert.cuh"
 
-rtBuffer<float4, 2> sysOutputBuffer; // RGBA32F
-
 rtDeclareVariable(float3, sysCameraPosition, , );
 rtDeclareVariable(float3, sysCameraU, , );
 rtDeclareVariable(float3, sysCameraV, , );

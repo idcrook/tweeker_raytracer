@@ -39,14 +39,14 @@ struct MaterialParameter
 {
   FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
   optix::float3 albedo;     // Albedo, tint, throughput change for specular surfaces. Pick your meaning.
+  int           albedoID;   // Bindless 2D texture ID used to modulate the albedo color when != RT_TEXTURE_ID_NULL.
+  int           cutoutID;   // Bindless 2D texture ID used to calculate the cutout opacity when != RT_TEXTURE_ID_NULL.
   optix::float3 absorption; // Absorption coefficient
   float         ior;        // Index of refraction
   unsigned int  flags;      // Thin-walled on/off
 
   // Manual padding to 16-byte alignment goes here.
   float unused0;
-  float unused1;
-  float unused2;
 };
 
 #endif // MATERIAL_PARAMETER_CUH

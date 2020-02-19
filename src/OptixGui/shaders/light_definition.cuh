@@ -39,7 +39,7 @@
 
 enum LightType
 {
-  LIGHT_ENVIRONMENT   = 0, // Constant white environment.
+  LIGHT_ENVIRONMENT   = 0, // constant color or spherical environment map.
   LIGHT_PARALLELOGRAM = 1  // Parallelogram area light.
 };
 
@@ -54,6 +54,12 @@ struct LightDefinition
   optix::float3 normal;
   float         area;
   optix::float3 emission;
+
+  // Bindless texture and buffer IDs. Only valid for spherical environment lights.
+  int                  idEnvironmentTexture;
+  rtBufferId<float, 2> idEnvironmentCDF_U;   // rtBufferId fields are integers.
+  rtBufferId<float, 1> idEnvironmentCDF_V;
+  float                environmentIntegral;
 
   // Manual padding to float4 alignment goes here.
   float         unused0;

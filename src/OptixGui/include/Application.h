@@ -56,7 +56,9 @@
 #include <GLFW/glfw3.h>
 
 #include "include/LensShader.h"
+#include "include/Picture.h"
 #include "include/PinholeCamera.h"
+#include "include/Texture.h"
 #include "include/Timer.h"
 
 #include "shaders/vertex_attributes.cuh"
@@ -90,6 +92,8 @@ struct MaterialParameterGUI
 {
   FunctionIndex indexBSDF;  // BSDF index to use in the closest hit program
   optix::float3 albedo;     // Tint, throughput change for specular materials
+  bool          useAlbedoTexture;
+  bool          useCutoutTexture;
   bool          thinwalled;
   optix::float3 absorptionColor; // absorption color and distance scale together build the absorption coefficient
   float         volumeDistanceScale;
@@ -106,7 +110,9 @@ public:
               const unsigned int stackSize,
               const bool         interop,
               const bool         light,
-              const unsigned int miss );
+              const unsigned int miss,
+              std::string const& environment);
+
 
   ~Application();
 
@@ -242,9 +248,15 @@ private:
   std::vector<LightDefinition> m_lightDefinitions;
   optix::Buffer                m_bufferLightDefinitions;
 
-  // There are only two types of materials in this demo.
+  Texture m_environmentTexture;
+
+  Texture m_textureAlbedo;
+  Texture m_textureCutout;
+
+  // There are only three types of materials in this demo.
   // The material parameters for these are determined by the parMaterialIndex variable on the GeometryInstance.
   optix::Material m_opaqueMaterial; // Used for all materials without cutout opacity.
+  optix::Material m_cutoutMaterial; // Used for all materials with cutout opacity.
   optix::Material m_lightMaterial;  // Used for all geometric lights. (Special cased diffuse emission distribution function to simplify the material system.)
 
   // The root node of the OptiX scene graph (sysTopObject)

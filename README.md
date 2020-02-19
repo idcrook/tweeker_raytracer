@@ -71,8 +71,10 @@ cmake --build build --target optixGui --parallel 7
 # run
 build/optixGui # [options]
 
-# run, pointing to the intro sample files via envariable
-OPTIX_SAMPLES_SDK_PTX_DIR=/home/dpc/projects/learning/rt/github/optix/optix_advanced_samples/src/data build/optixGui
+# run, pointing to the sample files via envariable
+export OPTIX_SAMPLES_SDK_DIR=/home/dpc/projects/learning/rt/github/optix/optix_advanced_samples/src
+
+build/optixGui
 
 ```
 
