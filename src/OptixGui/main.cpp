@@ -74,9 +74,9 @@ static void glfw_error_callback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
+// imgui will chain this in before it handles
 void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mods )
 {
-  bool handled = false;
   static unsigned int saveCount = 0;
 
   if( action == GLFW_PRESS )
@@ -87,7 +87,6 @@ void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mod
     case GLFW_KEY_Q:  // Set state to exit app
     {
       glfwSetWindowShouldClose(window, 1);
-      handled = true;
       break;
     }
 
@@ -100,17 +99,11 @@ void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mod
       const std::string outputImage = filename.str();
       std::cerr << "Saving current frame to '" << outputImage << "'\n";
       g_app->screenshot(outputImage);
-      handled = true;
       break;
     }
-
-    }
+    } // end switch( key )
   }
 
-  if (!handled) {
-    // forward key event to imgui
-    ImGui_ImplGlfw_KeyCallback( window, key, scancode, action, mods );
-  }
 }
 
 //------------------------------------------------------------------------------

@@ -144,11 +144,8 @@ Application::Application(GLFWwindow* window,
 
   // OpenGL 3
 
-  // If you have already installed GLFW callbacks in your app, call
-  // ImGui_ImplGlfw_InitForOpenGL() with install_callbacks=false and call them
-  // yourself.
-  //ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplGlfw_InitForOpenGL(window, false);
+  // imgui will send events to event handler callbacks installed for glfw (now even with install_callbacks=true)
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init();
 
   // This initializes the GLFW part including the font texture.
@@ -1196,7 +1193,6 @@ void Application::guiEventHandler()
   if (ImGui::IsKeyPressed(' ', false)) // Toggle the GUI window display with SPACE key.
   {
     m_isWindowVisible = !m_isWindowVisible;
-
   }
 
   const ImVec2 mousePosition = ImGui::GetMousePos(); // Mouse coordinate window client rect.
