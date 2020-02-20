@@ -88,10 +88,6 @@ Application::Application(GLFWwindow* window,
   ImGui::CreateContext();
   ImGuiIO &io = ImGui::GetIO();   (void)io;
 
-  // // Setup Dear ImGui style
-  // ImGui::StyleColorsDark();
-  // //ImGui::StyleColorsClassic();
-
   ImGuiStyle& style = ImGui::GetStyle();
 
   // Style the GUI colors to a neutral greyscale with plenty of transaparency to concentrate on the image.
@@ -146,16 +142,15 @@ Application::Application(GLFWwindow* window,
   style.Colors[ImGuiCol_NavHighlight]          = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
   style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
 
-  // Setup Platform/Renderer bindings
-  // ImGui_ImplGlfw_InitForOpenGL(window, true);
-  // ImGui_ImplOpenGL2_Init();
-
   // OpenGL 3
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  //ImGui_ImplOpenGL3_Init("#version 120");
-  //ImGui_ImplOpenGL3_Init("#version 130");
-  //ImGui_ImplOpenGL3_Init("#version 300 es");
+
+  // If you have already installed GLFW callbacks in your app, call
+  // ImGui_ImplGlfw_InitForOpenGL() with install_callbacks=false and call them
+  // yourself.
+  //ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplGlfw_InitForOpenGL(window, false);
   ImGui_ImplOpenGL3_Init();
+
   // This initializes the GLFW part including the font texture.
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
@@ -233,7 +228,6 @@ Application::~Application()
     m_context->destroy();
   }
 
-  // ImGui_ImplOpenGL2_Shutdown();
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
@@ -310,16 +304,9 @@ void Application::reshape(int width, int height)
 
 void Application::guiNewFrame()
 {
-  // // opengl2
-  // ImGui_ImplOpenGL2_NewFrame();
-  // ImGui_ImplGlfw_NewFrame();
-  // ImGui::NewFrame();
-
-  // opengl 3
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
   ImGui::NewFrame();
-
 }
 
 void Application::guiDemoWindow()
@@ -330,9 +317,7 @@ void Application::guiDemoWindow()
 void Application::guiRender()
 {
   ImGui::Render();
-  //ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 }
 
 

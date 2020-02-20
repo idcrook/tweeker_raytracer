@@ -8,26 +8,14 @@
 #include <IL/il.h>
 
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <cstdlib>
 #include <stdexcept>
 #include <chrono>
 
 // Parse command line arguments and options
 #include "include/InputParser.h"
-
-
-// #define Nx_MIN  (320)
-// #define Ny_MIN  (200)
-
-// // set maximum resolution ~ standard 4K dimensions
-// #define Nx_MAX  (3840)
-// #define Ny_MAX  (2240)  // was 2160, but increased so that square resolutions could hit 2240
-
-// #define Nx_DEFAULT  (1200)
-// #define Ny_DEFAULT  (600)
-
-// #define Nscene_DEFAULT (0)
-// #define Nscene_MAX  (4)   // Range [0 .. Nscene_MAX]
 
 #define Nsamples_DEFAULT  (64)
 #define Nsamples_MAX      (1024)
@@ -42,27 +30,17 @@
 
 static Application* g_app = nullptr;
 
-// static bool displayGUI = true; // unimplemented currently
-
-static void glfw_error_callback(int error, const char *description) {
-  fprintf(stderr, "Glfw Error %d: %s\n", error, description);
-}
-
 void printUsage(const std::string& argv0)
 {
   std::cerr << std::endl << "Usage: " << argv0 << " [options]" << std::endl;
   std::cerr << R"(
 App Options:
   -h | --help | help   Print this usage message and exit."
-  -v | --verbose       Verbose output.
-  -g | --debug         Debug output.
+  -v | --verbose       Verbose output. TBD
+  -g | --debug         Debug output. TBD
 
 )";
   std::cerr <<
-    // "  -s | --scene <int>   Scene selection number, N: 0, 1, (max: " << Nscene_MAX << ')' << std::endl <<
-    // "  -x | -dx <int>       Output image width, x dimension (default: "  << Nx_DEFAULT << ')' << std::endl <<
-    // "  -y | -dy <int>       Output image height, y dimension (default: " << Ny_DEFAULT << ')' << std::endl <<
-    // std::endl <<
     "  -w | --width <int>   GUI Window client width.  (default: "     << GUI_WINDOW_DEFAULT_STARTING_Nx << ')' << std::endl <<
     "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' << std::endl <<
     "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."    << std::endl <<
@@ -80,20 +58,72 @@ App Options:
   std::cerr << R"(
 App Keystrokes:
   SPACE  Toggles ImGui display.
+  s      Save a snapshot of current image to file.
+  q      Quits the App.
 
 )";
 
 }
 
+//------------------------------------------------------------------------------
+//
+//  GLFW callbacks
+//
+//------------------------------------------------------------------------------
+static void glfw_error_callback(int error, const char *description) {
+  fprintf(stderr, "Glfw Error %d: %s\n", error, description);
+}
+
+void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mods )
+{
+  bool handled = false;
+  static unsigned int saveCount = 0;
+
+  if( action == GLFW_PRESS )
+  {
+    switch( key )
+    {
+
+    case GLFW_KEY_Q:  // Set state to exit app
+    {
+      glfwSetWindowShouldClose(window, 1);
+      handled = true;
+      break;
+    }
+
+    case( GLFW_KEY_S ): // save screen shot, incrementing filename each time
+    {
+      std::stringstream filename;
+      filename << "screenshot_"
+               << std::setw(2) << std::setfill('0') << ++saveCount
+               << ".png";
+      const std::string outputImage = filename.str();
+      std::cerr << "Saving current frame to '" << outputImage << "'\n";
+      g_app->screenshot(outputImage);
+      handled = true;
+      break;
+    }
+
+    }
+  }
+
+  if (!handled) {
+    // forward key event to imgui
+    ImGui_ImplGlfw_KeyCallback( window, key, scancode, action, mods );
+  }
+}
+
+//------------------------------------------------------------------------------
+//
+//  main
+//
+//------------------------------------------------------------------------------
 
 int main(int argc, char* argv[])
 {
   int exit_code = EXIT_SUCCESS;
 
   // default values
-  // int Nx = Nx_DEFAULT;
-  // int Ny = Ny_DEFAULT;
-  // int Nscene = Nscene_DEFAULT;
   int Nsamples = Nsamples_DEFAULT;
   bool Qverbose;
   bool Qdebug;
@@ -141,26 +171,6 @@ int main(int argc, char* argv[])
     light = true;
   }
 
-  // sameOptionList.clear();
-  // sameOptionList.push_back("-s");  sameOptionList.push_back("--scene");
-  // const std::string &sceneNumber = cl_input.getCmdEquivalentsOption(sameOptionList);
-  // try {
-  //   if (!sceneNumber.empty()){
-  //     std::size_t pos;
-  //     int x = std::stoi(sceneNumber, &pos);
-  //     if (x >= 0 and x <= Nscene_MAX) {
-  //       Nscene = x;
-  //     } else {
-  //       std::cerr << "WARNING: Scene number " << x << " out of range. Maximum scene number: " << Nscene_MAX << std::endl;
-  //       std::cerr << "WARNING: Using a scene value of " << Nscene << std::endl;
-  //     }
-  //   }
-  // } catch (std::invalid_argument const &ex) {
-  //   printUsage(argv[0]);
-  //   std::cerr << "ERROR: Invalid scene number: " << sceneNumber << std::endl;
-  //   std::exit ( EXIT_FAILURE );
-  // }
-
   sameOptionList.clear();
   sameOptionList.push_back("-p");  sameOptionList.push_back("--samples");
   const std::string &numberOfSamples = cl_input.getCmdEquivalentsOption(sameOptionList);
@@ -183,62 +193,6 @@ int main(int argc, char* argv[])
     std::cerr << "ERROR: Invalid number of samples: " << numberOfSamples << std::endl;
     std::exit ( EXIT_FAILURE );
   }
-
-  // sameOptionList.clear();
-  // sameOptionList.push_back("-x");  sameOptionList.push_back("-dx");
-  // const std::string &dimWidth =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  // try {
-  //   if (!dimWidth.empty()){
-  //     std::size_t pos;
-  //     int x = std::stoi(dimWidth, &pos);
-  //     if (x >= Nx_MIN and x <= Nx_MAX) {
-  //       Nx = x;
-  //     } else {
-  //       std::cerr << "WARNING: Width (-dx) " << x << " out of range. ";
-  //       if (x > Nx_MAX) {
-  //         Nx = Nx_MAX;
-  //       }
-  //       if (x < Nx_MIN) {
-  //         Nx = Nx_MIN;
-  //       }
-  //       std::cerr << "WARNING: Using a value of " << Nx <<std::endl;
-  //     }
-  //   }
-  // } catch (std::invalid_argument const &ex) {
-  //   printUsage(argv[0]);
-  //   std::cerr << "ERROR: Invalid image width (-dx): " << dimWidth << std::endl;
-  //   std::exit ( EXIT_FAILURE );
-  // }
-
-  // sameOptionList.clear();
-  // sameOptionList.push_back("-y");  sameOptionList.push_back("-dy");
-  // const std::string &dimHeight = cl_input.getCmdEquivalentsOption(sameOptionList);
-  // try {
-  //   if (!dimHeight.empty())
-  //   {
-  //     std::size_t pos;
-  //     int x = std::stoi(dimHeight, &pos);
-  //     if (x >= Ny_MIN and x <= Ny_MAX)
-  //     {
-  //       Ny = x;
-  //     }
-  //     else
-  //     {
-  //       std::cerr << "WARNING: Width (-dy) " << x << " out of range. ";
-  //       if (x > Ny_MAX) {
-  //         Ny = Ny_MAX;
-  //       }
-  //       if (x < Ny_MIN) {
-  //         Ny = Ny_MIN;
-  //       }
-  //       std::cerr << "WARNING: Using a value of " << Ny <<std::endl;
-  //     }
-  //   }
-  // } catch (std::invalid_argument const &ex) {
-  //   printUsage(argv[0]);
-  //   std::cerr << "ERROR: Invalid image height (-dy): " << dimHeight << std::endl;
-  //   std::exit ( EXIT_FAILURE );
-  // }
 
   sameOptionList.clear();
   sameOptionList.push_back("-w");  sameOptionList.push_back("--width");
@@ -284,7 +238,6 @@ int main(int argc, char* argv[])
     std::cerr << "ERROR: Invalid stack size (--stack): " << deviceString << std::endl;
     std::exit ( EXIT_FAILURE );
   }
-
 
   sameOptionList.clear();
   sameOptionList.push_back("-k");  sameOptionList.push_back("--stack");
@@ -334,7 +287,6 @@ int main(int argc, char* argv[])
     std::exit ( EXIT_FAILURE );
   }
 
-
   sameOptionList.clear();
   sameOptionList.push_back("-f");  sameOptionList.push_back("--file");
   const std::string &outputImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
@@ -350,7 +302,6 @@ int main(int argc, char* argv[])
   }
 
 
-
   // Setup window after handling command line options
   glfwSetErrorCallback(glfw_error_callback);
 
@@ -359,7 +310,6 @@ int main(int argc, char* argv[])
     glfw_error_callback(1, "GLFW failed to initialize.");
     std::exit ( 1 ) ;
   }
-
 
 
 // Decide GL version (set GL Hints before glfwCreateWindow)
@@ -388,6 +338,7 @@ int main(int argc, char* argv[])
     std::exit ( 2 );
   }
 
+
   // current OpenGL context
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1); // Enable vsync
@@ -414,21 +365,23 @@ int main(int argc, char* argv[])
   }
   else
   {
-
-    std::cerr << "[INFO] OpenGL renderer: "
+    std::cerr << "INFO: OpenGL renderer: "
               << glGetString(GL_RENDERER)
               << std::endl;
 
-    std::cerr << "[INFO] OpenGL from GLFW: "
+    std::cerr << "INFO: OpenGL version in GLFW window context: "
               << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR)
               << "."
               << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR)
               << std::endl;
 
-    std::cerr << "[INFO] GLFW version: "
+    std::cerr << "INFO: GLFW version: "
               << glfwGetVersionString()
               << std::endl;
   }
+
+  // Note: this overrides imgui key callback with our own, so need to chain imgui handler after.
+  glfwSetKeyCallback( window, keyCallback );
 
   // set initial OpenGL viewport
   glfwGetFramebufferSize(window, &windowWidth, &windowWidth);
@@ -452,7 +405,7 @@ int main(int argc, char* argv[])
   while (!glfwWindowShouldClose(window))
   {
     // Poll and handle events (inputs, window resize, etc.)
-    glfwPollEvents(); // Render continuously.
+    glfwPollEvents();
 
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 
@@ -460,7 +413,6 @@ int main(int argc, char* argv[])
 
     if (hasGUI)
     {
-
       g_app->guiNewFrame();
 
       //g_app->guiDemoWindow(); // ImGui example code.
@@ -470,13 +422,11 @@ int main(int argc, char* argv[])
       g_app->guiEventHandler(); // Currently only reacting on SPACE to toggle the GUI window.
 
       g_app->render();  // OptiX rendering and OpenGL texture update.
-      g_app->display(); // OpenGL display. // ERROR 1282 in glEnd (only using GLAD)
-
+      g_app->display(); // OpenGL display.
 
       g_app->guiRender(); // Render all ImGUI elements at last.
 
       glfwSwapBuffers(window);
-
     }
 
     else
@@ -490,19 +440,14 @@ int main(int argc, char* argv[])
 
       glfwSetWindowShouldClose(window, 1);
     }
-
   }
 
   // Cleanup
-  ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplGlfw_Shutdown();
-  ImGui::DestroyContext();
+  delete g_app;
 
   glfwDestroyWindow(window);
 
   ilShutDown();
-
-  //delete g_app;
 
   glfwTerminate();
 
