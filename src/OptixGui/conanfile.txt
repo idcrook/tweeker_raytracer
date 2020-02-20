@@ -1,11 +1,13 @@
 [requires]
 imgui/1.75
 glfw/3.3.2@bincrafters/stable
-glad/0.1.33
-# conan search 'glad*'  --remote=conan-center
-# switched from glew
-#glew/2.1.0@bincrafters/stable
+glew/2.1.0@bincrafters/stable
 
+# switched back to glew from glad
+#glad/0.1.33
+# conan search 'glad*'  --remote=conan-center
+# With GLAD, there is an openGL error reported each time the copy of render
+# buffer to openGL window frame: ERROR 1282 in glEnd (only using GLAD)
 
 [generators]
 cmake_find_package_multi
