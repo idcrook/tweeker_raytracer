@@ -102,13 +102,17 @@ cd tweeker_raytracer # top-level directory again
 build/optixGui [options]
 ```
 
-Image renders for `optixGui`
-----------------------------
+Image renders and screencaps from `optixGui`
+--------------------------------------------
 
 ![intro Optix 04 - shapes](assets/img/intro_04.png)
 
-![intro Optix 06 - alternative camera projections nested materials](assets/img/intro_06.png)
+![intro Optix 06 - alternative camera projections nested materials](assets/img/intro_06.png) Light, nested materials
 
-![intro Optix 07 - image textures including environment map](assets/img/intro_07.png)
+![intro Optix 07 - image textures including environment map](assets/img/intro_07.png) image textures including environment map
 
-![intro Optix 10 - denoiser and env](assets/img/intro_10_altenv_light_1024pp.png)
+![intro Optix 09 - denoiser off](assets/img/intro_09_denoise_off_8pp.png) denoiser OFF, 8 samples per pixel
+
+![intro Optix 09 - denoiser on](assets/img/intro_09_denoise_on_8pp.png) denoiser ON, 8 samples per pixel
+
+![intro Optix 10 - denoiser and env](assets/img/intro_10_altenv_light_1024pp.png) Alternate environment, light, 1k samples per pixel
