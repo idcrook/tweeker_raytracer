@@ -49,3 +49,4 @@ CMakeCache.txt
 
 # imgui settings file
 imgui.ini
+/screenshot_*.png
