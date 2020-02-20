@@ -47,18 +47,32 @@ private:
   std::vector <std::string> tokens;
 };
 
-
 /****
+#include <stdexcept>
+int main(int argc, char **argv){
+  InputParser input(argc, argv);
+  bool Qverbose;
 
-     int main(int argc, char **argv){
-     InputParser input(argc, argv);
-     if(input.cmdOptionExists("-h")){
-     // Do stuff
-     }
-     const std::string &filename = input.getCmdOption("-f");
-     if (!filename.empty()){
-     // Do interesting things ...
-     }
-     return 0;
-     }
+  if(input.cmdOptionExists("-h")){
+    // Do stuff
+  }
+  const std::string &filename = input.getCmdOption("-f");
+  if (!filename.empty()){
+    // Do interesting things ...
+  }
+  std::vector <std::string> sameOptionList;
+  sameOptionList.clear();
+  sameOptionList.push_back("-v"); sameOptionList.push_back("--verbose");
+  Qverbose = input.cmdEquivalentsExist(sameOptionList);
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-w");  sameOptionList.push_back("--width");
+  const std::string &winWidth =  input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!winWidth.empty()){
+    }
+  } catch (std::invalid_argument const &ex) {
+  }
+  return 0;
+}
 */
