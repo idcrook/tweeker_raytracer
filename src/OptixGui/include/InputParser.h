@@ -70,6 +70,8 @@ int main(int argc, char **argv){
   const std::string &winWidth =  input.getCmdEquivalentsOption(sameOptionList);
   try {
     if (!winWidth.empty()){
+      std::size_t pos;
+      int x = std::stoi(winHeight, &pos);
     }
   } catch (std::invalid_argument const &ex) {
   }
