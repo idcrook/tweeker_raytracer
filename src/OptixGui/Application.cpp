@@ -357,6 +357,26 @@ void Application::getSystemInformation()
   }
   std::cout << "OptiX " << major << "." << minor << "." << micro << std::endl;
 
+  unsigned int DRV_MAJOR = 0;
+  unsigned int DRV_MINOR = 0;
+  RT_CHECK_ERROR_NO_CONTEXT(rtGlobalGetAttribute(RT_GLOBAL_ATTRIBUTE_DISPLAY_DRIVER_VERSION_MAJOR,
+                                                 sizeof(DRV_MAJOR), &(DRV_MAJOR)));
+  RT_CHECK_ERROR_NO_CONTEXT(rtGlobalGetAttribute(RT_GLOBAL_ATTRIBUTE_DISPLAY_DRIVER_VERSION_MINOR,
+                                                 sizeof(DRV_MINOR), &(DRV_MINOR)));
+  std::cout << "Display driver version: " << DRV_MAJOR << '.' << DRV_MINOR << std::endl;
+
+  // RT_GLOBAL_ATTRIBUTE_ENABLE_RTX is an experimental attribute which sets the
+  // execution strategy used by Optix for the next context to be created. This
+  // attribute may be deprecated in a future release.
+  // Possible values: 0 (legacy default), 1 (compile and link programs separately).
+  RTresult res;
+  int RTX = 1;
+  res = rtGlobalSetAttribute(RT_GLOBAL_ATTRIBUTE_ENABLE_RTX, sizeof(RTX), &(RTX));
+  if (res != RT_SUCCESS) {
+    std::cerr << "ERROR: RTX execution strategy got Optix but encountered error condition on request." << std::endl;
+    std::exit ( EXIT_FAILURE );
+  }
+
   unsigned int numberOfDevices = 0;
   RT_CHECK_ERROR_NO_CONTEXT(rtDeviceGetDeviceCount(&numberOfDevices));
   std::cout << "Number of Devices = " << numberOfDevices << std::endl << std::endl;
@@ -459,7 +479,7 @@ void Application::initOptiX()
     // Select the GPUs to use with this context.
     unsigned int numberOfDevices = 0;
     RT_CHECK_ERROR_NO_CONTEXT(rtDeviceGetDeviceCount(&numberOfDevices));
-    std::cout << "Number of Devices = " << numberOfDevices << std::endl << std::endl;
+    std::cout << "initOptiX: Number of Devices = " << numberOfDevices << std::endl << std::endl;
 
     std::vector<int> devices;
 
@@ -1479,6 +1499,7 @@ void Application::initMaterials()
 {
   Picture* picture = new Picture;
 
+  // if the program crashes here, pay close attention to the file name used
   std::string textureFilename = std::string(sutil::samplesDir()) + "/data/NVIDIA_Logo.jpg";
   //std::cerr << "textureFilename " << textureFilename << std::endl;
   picture->load(textureFilename);

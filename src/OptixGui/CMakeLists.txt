@@ -2,10 +2,10 @@ cmake_minimum_required ( VERSION 3.11 )
 
 project ( OptixGui VERSION 0.1.0  )
 
-# # set to match your path
-# set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
-#   CACHE PATH "Path to OptiX installed location.")
-# can set on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+# set to match your path
+set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
+  CACHE PATH "Path to OptiX installed location.")
+# can override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 
 
 # needed for conan link_directories  imgui::imgui, etc.
@@ -29,8 +29,6 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/../CMake"
   ${CMAKE_MODULE_PATH}
   )
-
-#message(STATUS "CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}")
 
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
@@ -56,7 +54,8 @@ endif()
 # CONFIG option is important so CMake does not search for modules into the default modules directory
 find_package(imgui CONFIG)
 find_package(glfw CONFIG)
-find_package(glad CONFIG)
+#find_package(glad CONFIG)
+find_package(glew CONFIG)
 
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
@@ -190,15 +189,18 @@ function(OPTIX_add_sample_executable target_name)
     sutil_sdk
     OpenGL::GL
     imgui::imgui
-    glad::glad
+    #glad::glad
+    glew::glew
     glfw::glfw
     ${optix_LIBRARY}
     ${IL_LIBRARIES}
     ${ILU_LIBRARIES}
     ${ILUT_LIBRARIES}
     )
-  # are using GLAD opengl loader
-  target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+  # # are using GLAD opengl loader
+  # target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+  # are using GLEW opengl loader
+  target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
   if(USING_GNU_CXX)
     target_link_libraries( ${target_name} m ) # Explicitly link against math library (C samples don't do that by default)

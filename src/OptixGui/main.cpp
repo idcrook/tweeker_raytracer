@@ -419,11 +419,7 @@ int main(int argc, char* argv[])
               << glGetString(GL_RENDERER)
               << std::endl;
 
-    // std::cerr << "[INFO] OpenGL "
-    //           << GLVersion.major << "." << GLVersion.minor
-    //           << std::endl;
-
-    std::cerr << "[INFO] OpenGL from GLFW "
+    std::cerr << "[INFO] OpenGL from GLFW: "
               << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR)
               << "."
               << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR)
@@ -474,7 +470,7 @@ int main(int argc, char* argv[])
       g_app->guiEventHandler(); // Currently only reacting on SPACE to toggle the GUI window.
 
       g_app->render();  // OptiX rendering and OpenGL texture update.
-      g_app->display(); // OpenGL display. // ERROR 1282 in glEnd
+      g_app->display(); // OpenGL display. // ERROR 1282 in glEnd (only using GLAD)
 
 
       g_app->guiRender(); // Render all ImGUI elements at last.
