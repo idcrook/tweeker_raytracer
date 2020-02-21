@@ -217,6 +217,9 @@ OPTIX_add_sample_executable( optixGui
   include/Application.h
   Application.cpp
 
+  include/Options.h
+  Options.cpp
+
   Box.cpp
   Parallelogram.cpp
   Plane.cpp

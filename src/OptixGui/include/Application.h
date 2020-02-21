@@ -55,6 +55,8 @@
 // Include glfw3.h after our OpenGL definitions
 #include <GLFW/glfw3.h>
 
+#include "include/Options.h"
+
 #include "include/LensShader.h"
 #include "include/Picture.h"
 #include "include/PinholeCamera.h"
@@ -68,6 +70,13 @@
 #include <string>
 #include <map>
 
+#define APP_EXIT_SUCCESS          0
+
+#define APP_ERROR_UNKNOWN        -1
+#define APP_ERROR_CREATE_WINDOW  -2
+#define APP_ERROR_GLFW_INIT      -3
+#define APP_ERROR_GLEW_INIT      -4
+#define APP_ERROR_APP_INIT       -5
 
 // For rtDevice*() function error checking. No OptiX context present at that time.
 #define RT_CHECK_ERROR_NO_CONTEXT( func ) \
@@ -112,6 +121,10 @@ public:
               const bool         light,
               const unsigned int miss,
               std::string const& environment);
+
+
+  Application(GLFWwindow* window,
+              Options const& options);
 
 
   ~Application();
@@ -191,6 +204,9 @@ private:
   // OpenGL variables:
   GLuint m_pboOutputBuffer;
   GLuint m_hdrTexture;
+
+  //Logger m_logger;  // TODO: add Logger
+
 
   // OptiX variables:
   optix::Context m_context;

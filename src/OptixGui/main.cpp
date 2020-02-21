@@ -15,7 +15,7 @@
 #include <chrono>
 
 // Parse command line arguments and options
-#include "include/InputParser.h"
+#include "include/Options.h"
 
 #define Nsamples_DEFAULT  (64)
 #define Nsamples_MAX      (1024)
@@ -29,41 +29,6 @@
 #define NMiss_Shader_MAX                (2)    // Range [0 .. NMiss_Shader_MAX]
 
 static Application* g_app = nullptr;
-
-void printUsage(const std::string& argv0)
-{
-  std::cerr << std::endl << "Usage: " << argv0 << " [options]" << std::endl;
-  std::cerr << R"(
-App Options:
-  -h | --help | help   Print this usage message and exit."
-  -v | --verbose       Verbose output. TBD
-  -g | --debug         Debug output. TBD
-
-)";
-  std::cerr <<
-    "  -w | --width <int>   GUI Window client width.  (default: "     << GUI_WINDOW_DEFAULT_STARTING_Nx << ')' << std::endl <<
-    "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' << std::endl <<
-    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."    << std::endl <<
-    "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
-    "  -l | --light         Add an area light to the scene. "                  << std::endl <<
-    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: " << NMiss_Shader_DEFAULT << ')' << std::endl <<
-    "    -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << "???" << ')' << std::endl <<
-    "  -k | --stack <int>   Set the OptiX stack size (1024) (debug feature). (default: " << NOptix_Stack_Size_DEFAULT << ')' << std::endl <<
-    ""  << std::endl <<
-    "  -f | --file <filename> Save image to file and exit."  << std::endl <<
-    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << Nsamples_DEFAULT << ", max: " << Nsamples_MAX << ')' << std::endl <<
-    "";
-
-
-  std::cerr << R"(
-App Keystrokes:
-  SPACE  Toggles ImGui display.
-  s      Save a snapshot of current image to file.
-  q      Quits the App.
-
-)";
-
-}
 
 //------------------------------------------------------------------------------
 //
@@ -106,204 +71,11 @@ void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mod
 
 }
 
-//------------------------------------------------------------------------------
-//
-//  main
-//
-//------------------------------------------------------------------------------
-
-int main(int argc, char* argv[])
+int runApp(Options const& options)
 {
-  int exit_code = EXIT_SUCCESS;
 
-  // default values
-  int Nsamples = Nsamples_DEFAULT;
-  bool Qverbose;
-  bool Qdebug;
-
-  int windowWidth = GUI_WINDOW_DEFAULT_STARTING_Nx;
-  int windowHeight = GUI_WINDOW_DEFAULT_STARTING_Ny;
-  int  devices      = 3210;  // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
-  bool interop      = true;  // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
-  bool light        = false; // Add a geometric are light. Best used with miss 0 and 1.
-  int  miss         = NMiss_Shader_DEFAULT; // Select the environment light (0 = black, no light; 1 = constant white environment; 2 = spherical environment texture.
-  int  stackSize    = NOptix_Stack_Size_DEFAULT ;  // Command line parameter just to be able to find the smallest working size.
-  std::string environment = std::string(sutil::samplesDir()) + "/data/NV_Default_HDR_3000x1500.hdr";
-
-  std::string filenameScreenshot;
-  bool hasGUI = true;
-
-  std::vector <std::string> sameOptionList;
-  InputParser cl_input(argc, argv);
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-h"); sameOptionList.push_back("--help");
-  sameOptionList.push_back("?");  sameOptionList.push_back("help");
-  if (cl_input.cmdEquivalentsExist(sameOptionList) ) {
-    printUsage(argv[0]);
-    std::exit( exit_code );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-v"); sameOptionList.push_back("--verbose");
-  Qverbose = cl_input.cmdEquivalentsExist(sameOptionList);
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-g"); sameOptionList.push_back("--debug");
-  Qdebug = cl_input.cmdEquivalentsExist(sameOptionList);
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-n"); sameOptionList.push_back("--nopbo");
-  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
-    interop = false;
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-l"); sameOptionList.push_back("--light");
-  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
-    light = true;
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-p");  sameOptionList.push_back("--samples");
-  const std::string &numberOfSamples = cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!numberOfSamples.empty()){
-      std::size_t pos;
-      int x = std::stoi(numberOfSamples, &pos);
-      if ( (x > 0) && (x <= Nsamples_MAX))  {
-        Nsamples = x;
-      } else {
-        std::cerr << "WARNING: Number of samples " << x << " is out of range. ";
-        if (x > Nsamples_MAX) {
-          Nsamples = Nsamples_MAX;
-        }
-        std::cerr << "WARNING: Using a value of " << Nsamples << std::endl;
-      }
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid number of samples: " << numberOfSamples << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-w");  sameOptionList.push_back("--width");
-  const std::string &winWidth =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!winWidth.empty()){
-      std::size_t pos;
-      int x = std::stoi(winWidth, &pos);
-      windowWidth = x;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid window width (--width): " << winWidth << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-e");  sameOptionList.push_back("--height");
-  const std::string &winHeight =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!winHeight.empty()){
-      std::size_t pos;
-      int x = std::stoi(winHeight, &pos);
-      windowHeight = x;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid window width (--height): " << winHeight << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-d");  sameOptionList.push_back("--device");
-  const std::string &deviceString =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!deviceString.empty()){
-      std::size_t pos;
-      int x = std::stoi(deviceString, &pos);
-      devices = x;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid stack size (--stack): " << deviceString << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-k");  sameOptionList.push_back("--stack");
-  const std::string &stackSizeString =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!stackSizeString.empty()){
-      std::size_t pos;
-      int x = std::stoi(stackSizeString, &pos);
-      stackSize = x;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid stack size (--stack): " << stackSizeString << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-m");  sameOptionList.push_back("--miss");
-  const std::string &missShader = cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!missShader.empty()){
-      std::size_t pos;
-      int x = std::stoi(missShader, &pos);
-      if (x >= 0 and x <= NMiss_Shader_MAX) {
-        miss = x;
-      } else {
-        std::cerr << "WARNING: Miss shader number " << x << " out of range. Maximum: " << NMiss_Shader_MAX << std::endl;
-        std::cerr << "WARNING: Using miss shader " << miss << std::endl;
-      }
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid miss shader number: " << missShader << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-i");  sameOptionList.push_back("--env");
-  const std::string &envImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!envImageFile.empty()) {
-      environment = envImageFile;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid filename (--env): " << envImageFile << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-  sameOptionList.clear();
-  sameOptionList.push_back("-f");  sameOptionList.push_back("--file");
-  const std::string &outputImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
-  try {
-    if (!outputImageFile.empty()) {
-      filenameScreenshot = outputImageFile;
-      hasGUI = false;
-    }
-  } catch (std::invalid_argument const &ex) {
-    printUsage(argv[0]);
-    std::cerr << "ERROR: Invalid filename (--file): " << outputImageFile << std::endl;
-    std::exit ( EXIT_FAILURE );
-  }
-
-
-  // Setup window after handling command line options
-  glfwSetErrorCallback(glfw_error_callback);
-
-  if (!glfwInit())
-  {
-    glfw_error_callback(1, "GLFW failed to initialize.");
-    std::exit ( 1 ) ;
-  }
-
+  int widthClient  = std::max(1, options.getClientWidth());
+  int heightClient = std::max(1, options.getClientHeight());
 
 // Decide GL version (set GL Hints before glfwCreateWindow)
 // glxinfo -B
@@ -324,11 +96,11 @@ int main(int argc, char* argv[])
 #endif
 
 // Create window with graphics context
-  GLFWwindow *window = glfwCreateWindow(windowWidth, windowHeight, "OptiX 6.5 Rayocaster", NULL, NULL);
+  GLFWwindow *window = glfwCreateWindow(widthClient, heightClient, "OptiX 6.5 Rayocaster", NULL, NULL);
   if (window == NULL) {
-    glfw_error_callback(2, "Failed to create GLFW window..");
+    glfw_error_callback(APP_ERROR_CREATE_WINDOW, "Failed to create GLFW window..");
     glfwTerminate();
-    std::exit ( 2 );
+    return APP_ERROR_CREATE_WINDOW;
   }
 
 
@@ -352,9 +124,9 @@ int main(int argc, char* argv[])
 
   if (err)
   {
-    glfw_error_callback(3, "Failed to initialize OpenGL loader!");
+    glfw_error_callback(APP_ERROR_GLEW_INIT, "Failed to initialize OpenGL loader!");
     glfwTerminate();
-    std::exit ( 3 );
+    return  APP_ERROR_GLEW_INIT ;
   }
   else
   {
@@ -376,23 +148,22 @@ int main(int argc, char* argv[])
   // Note: this overrides imgui key callback with our own, so need to chain imgui handler after.
   glfwSetKeyCallback( window, keyCallback );
 
-  // set initial OpenGL viewport
-  glfwGetFramebufferSize(window, &windowWidth, &windowWidth);
-  glViewport(0, 0, windowWidth, windowHeight);
-
   ilInit(); // Initialize DevIL once.
 
   // start our Application context
-  g_app = new Application(window, windowWidth, windowHeight,
-                          devices, stackSize, interop, light, miss, environment);
+  g_app = new Application(window, options);
 
   if (!g_app->isValid())
   {
-    glfw_error_callback(4, "Application initialization failed.");
+    std::cerr << "ERROR: Application initialization failed." << std::endl;
     ilShutDown();
     glfwTerminate();
-    std::exit ( 4 );
+    return ( APP_ERROR_APP_INIT );
   }
+
+  // set initial OpenGL viewport
+  glfwGetFramebufferSize(window, &widthClient, &heightClient);
+  glViewport(0, 0, widthClient, heightClient);
 
   // main loop
   while (!glfwWindowShouldClose(window))
@@ -400,11 +171,11 @@ int main(int argc, char* argv[])
     // Poll and handle events (inputs, window resize, etc.)
     glfwPollEvents();
 
-    glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+    glfwGetFramebufferSize(window, &widthClient, &heightClient);
 
-    g_app->reshape(windowWidth, windowHeight);
+    g_app->reshape(widthClient, heightClient);
 
-    if (hasGUI)
+    if (options.hasGUI())
     {
       g_app->guiNewFrame();
 
@@ -421,11 +192,12 @@ int main(int argc, char* argv[])
 
       glfwSwapBuffers(window);
     }
-
     else
     {
-      std::cerr << "Collecting " << Nsamples << " samples per pixel..." << std::endl;
-      for (int i = 0; i < Nsamples; ++i) // Accumulate samples per pixel.
+      std::string filenameScreenshot = options.getFilenameScreenshot();
+      int numSamples = options.getNumberSamples();
+      std::cerr << "Collecting " << numSamples << " samples per pixel..." << std::endl;
+      for (int i = 0; i < numSamples; ++i) // Accumulate samples per pixel.
       {
         g_app->render();  // OptiX rendering and OpenGL texture update.
       }
@@ -438,11 +210,41 @@ int main(int argc, char* argv[])
   // Cleanup
   delete g_app;
 
-  glfwDestroyWindow(window);
-
   ilShutDown();
+
+  glfwDestroyWindow(window);
 
   glfwTerminate();
 
-  std::exit ( EXIT_SUCCESS);
+  return APP_EXIT_SUCCESS; // Success.
+}
+
+
+//------------------------------------------------------------------------------
+//
+//  main
+//
+//------------------------------------------------------------------------------
+
+int main(int argc, char* argv[])
+{
+  // Setup window after handling command line options
+  glfwSetErrorCallback(glfw_error_callback);
+
+  if (!glfwInit())
+  {
+    glfw_error_callback(APP_ERROR_GLFW_INIT, "GLFW failed to initialize.");
+    std::exit ( APP_ERROR_GLFW_INIT ) ;
+  }
+
+  int result = APP_ERROR_UNKNOWN;
+
+  Options options;
+
+  if (options.parseCommandLine(argc, argv))
+  {
+    result = runApp(options);
+  }
+
+  return result; // exit
 }
