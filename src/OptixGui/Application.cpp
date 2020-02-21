@@ -29,6 +29,7 @@
 #include "shaders/app_config.cuh"
 
 #include "include/Application.h"
+#include "include/Options.h"
 
 #include <optix.h>
 #include <optixu/optixpp_namespace.h>
@@ -60,28 +61,22 @@ static std::string ptxPath(std::string const& cuda_file)
          std::string(SAMPLE_NAME) + std::string("_generated_") + cuda_file + std::string(".ptx");
 }
 
-
 Application::Application(GLFWwindow* window,
-                         const int width,
-                         const int height,
-                         const unsigned int devices,
-                         const unsigned int stackSize,
-                         const bool interop,
-                         const bool light,
-                         const unsigned int miss,
-                         std::string const& environment)
-
+                         Options const& options)
 : m_window(window)
-, m_width(width)
-, m_height(height)
-, m_devicesEncoding(devices)
-, m_stackSize(stackSize)
-, m_interop(interop)
-, m_light(light)
-, m_missID(miss)
-, m_environmentFilename(environment)
-
+//, m_logger(std::cerr)
 {
+  m_width   = std::max(1, options.getClientWidth());
+  m_height  = std::max(1, options.getClientHeight());
+  m_devicesEncoding = options.getDevicesEncoding();
+  m_stackSize = options.getStackSize();
+  m_interop = options.getInterop();
+
+  m_light = options.getLight();
+  m_missID  = options.getMiss();
+  m_environmentFilename = options.getEnvironment();
+
+  m_isValid = false;
 
   // Setup ImGui binding.
   IMGUI_CHECKVERSION();
