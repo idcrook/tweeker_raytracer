@@ -3,30 +3,18 @@
 
 #include "include/Application.h"
 
+// utilities library from nvidia SDK
 #include <sutil.h>
 
+// Devil
 #include <IL/il.h>
 
 #include <iostream>
 #include <iomanip>
 #include <sstream>
-#include <cstdlib>
-#include <stdexcept>
-#include <chrono>
 
 // Parse command line arguments and options
 #include "include/Options.h"
-
-#define Nsamples_DEFAULT  (64)
-#define Nsamples_MAX      (1024)
-
-// Assign default GUI window size
-#define GUI_WINDOW_DEFAULT_STARTING_Nx  (1280)
-#define GUI_WINDOW_DEFAULT_STARTING_Ny  ( 720)
-
-#define NOptix_Stack_Size_DEFAULT       (1024)
-#define NMiss_Shader_DEFAULT            (2)
-#define NMiss_Shader_MAX                (2)    // Range [0 .. NMiss_Shader_MAX]
 
 static Application* g_app = nullptr;
 
@@ -103,8 +91,7 @@ int runApp(Options const& options)
     return APP_ERROR_CREATE_WINDOW;
   }
 
-
-  // current OpenGL context
+  // Set current OpenGL context
   glfwMakeContextCurrent(window);
   glfwSwapInterval(1); // Enable vsync
 
@@ -145,7 +132,7 @@ int runApp(Options const& options)
               << std::endl;
   }
 
-  // Note: this overrides imgui key callback with our own, so need to chain imgui handler after.
+  // Note: imgui now saves and chains any glfw callbacks registered
   glfwSetKeyCallback( window, keyCallback );
 
   ilInit(); // Initialize DevIL once.
@@ -161,7 +148,7 @@ int runApp(Options const& options)
     return ( APP_ERROR_APP_INIT );
   }
 
-  // set initial OpenGL viewport
+  // Set initial OpenGL viewport
   glfwGetFramebufferSize(window, &widthClient, &heightClient);
   glViewport(0, 0, widthClient, heightClient);
 
@@ -228,13 +215,12 @@ int runApp(Options const& options)
 
 int main(int argc, char* argv[])
 {
-  // Setup window after handling command line options
   glfwSetErrorCallback(glfw_error_callback);
 
   if (!glfwInit())
   {
     glfw_error_callback(APP_ERROR_GLFW_INIT, "GLFW failed to initialize.");
-    std::exit ( APP_ERROR_GLFW_INIT ) ;
+    return APP_ERROR_GLFW_INIT;
   }
 
   int result = APP_ERROR_UNKNOWN;
