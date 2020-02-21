@@ -20,7 +20,6 @@
 #define NMiss_Shader_DEFAULT            (2)
 #define NMiss_Shader_MAX                (2)    // Range [0 .. NMiss_Shader_MAX]
 
-
 Options::Options()
   : m_verbose(0)
   , m_debug(false)
@@ -271,23 +270,23 @@ void Options::printUsage(const std::string& argv0)
   std::cerr << std::endl << "Usage: " << argv0 << " [options]" << std::endl;
   std::cerr << R"(
 App Options:
-  -h | --help | help   Print this usage message and exit."
+  -h | --help | help   Print this usage message and exit.
   -v | --verbose       Verbose output. TBD
   -g | --debug         Debug output. TBD
 
 )";
   std::cerr <<
-    "  -w | --width <int>   GUI Window client width.  (default: "     << GUI_WINDOW_DEFAULT_STARTING_Nx << ')' << std::endl <<
-    "  -e | --height <int>  GUI Window client height. (default: "     << GUI_WINDOW_DEFAULT_STARTING_Ny << ')' << std::endl <<
-    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: 3210)."    << std::endl <<
+    "  -w | --width <int>   GUI Window client width.  (default: "     << m_widthClient << ')' << std::endl <<
+    "  -e | --height <int>  GUI Window client height. (default: "     << m_heightClient << ')' << std::endl <<
+    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: " << m_devices << ')' << std::endl <<
     "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
     "  -l | --light         Add an area light to the scene. "                  << std::endl <<
-    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: " << NMiss_Shader_DEFAULT << ')' << std::endl <<
+    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: " << m_miss << ')' << std::endl <<
     "    -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << m_environment << ')' << std::endl <<
-    "  -k | --stack <int>   Set the OptiX stack size (1024) (debug feature). (default: " << NOptix_Stack_Size_DEFAULT << ')' << std::endl <<
+    "  -k | --stack <int>   Set the OptiX stack size (debug feature). (default: " << m_stackSize << ')' << std::endl <<
     ""  << std::endl <<
     "  -f | --file <filename> Save image to file and exit."  << std::endl <<
-    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << NSamples_DEFAULT << ", max: " << NSamples_MAX << ')' << std::endl <<
+    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << m_numberSamples << ", max: " << NSamples_MAX << ')' << std::endl <<
     "";
 
   std::cerr << R"(
