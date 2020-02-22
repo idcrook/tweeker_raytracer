@@ -30,6 +30,9 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
+message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
 
