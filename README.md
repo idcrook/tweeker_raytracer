@@ -7,14 +7,12 @@ Experimental raytracing test bed.
 
 Applications:
 
--	[OptixGui](src/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
-
 Name is a play on my earlier project `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
 
 Pre-requisites
 --------------
 
-Tested on Ubuntu Linux 19.10 on an amd64 system with RTX GeForce card.
+Tested on Ubuntu Linux 19.10 on an x86-64 system with RTX GeForce card.
 
 -	Uses CMake to build.
 -	Uses [conan](https://conan.io/) for some C++ library package management
@@ -26,7 +24,7 @@ Uses conan as C++ dependency manager. In general this means
 
 1.	Install conan: https://docs.conan.io/en/latest/installation.html
 2.	Clone this repo
-3.	Install dependencies (See respective README)
+3.	Install dependencies using conan or
 	-	Generate dependency package cmake includes (via `conan`\)
 	-	Use CMake to generate Makefiles
 	-	Use cmake to compile/build project sources and libs
@@ -34,7 +32,9 @@ Uses conan as C++ dependency manager. In general this means
 
 ### Other Third-party dependencies
 
-#### Install DevIL image library
+In addition to baseline requirements of CUDA SDK and Optix 6.5 and/or Optix 7.0 SDK (refer to `notes` directory for how I did it) there are addition libraries to links into the apps.
+
+#### Install DevIL developer image library
 
 http://openil.sourceforge.net/
 
@@ -52,7 +52,9 @@ Apps
 `optixGui`
 ----------
 
-OptiX 6.5 gui.
+-	[OptixGui](src/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
+
+OptiX 6.5 imgui
 
 -	Uses imgui (using GLFW and OpenGL3 via GLEW)
 	-	These are installed using conan.io
@@ -64,6 +66,10 @@ See respective [README.md](src/OptixGui/README.md) for build instructions and `c
 `optix7Gui`
 -----------
 
+-	[Optix7Gui](src/Optix7Gui) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/intro_denoiser
+
+OptiX 7 imgui
+
 -	Uses imgui (using GLFW and OpenGL3 via GLEW)
 	-	These are installed using conan.io
 -	Uses DevIL image library
@@ -71,10 +77,13 @@ See respective [README.md](src/OptixGui/README.md) for build instructions and `c
 
 See respective [README.md](src/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
 
-Build `optixGui`
-----------------
+Build
+-----
 
-Refer to [OptixGui README](src/OptixGui/README.md)
+Refer to
+
+-	[OptixGui README](src/OptixGui/README.md)
+-	[Optix7Gui README](src/Optix7Gui/README.md)
 
 ### Run
 

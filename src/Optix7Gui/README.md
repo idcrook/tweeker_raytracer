@@ -7,6 +7,11 @@ Using conan as C++ dependency manager
 
 Assumes DevIL headers and library are installed on system.
 
+Notes
+-----
+
+Since am using more recent imgui version compared to the original sources, adjusted the calls into the imgui bindings and updated the styles.
+
 ### Point to samples directory
 
 Expects textures from this repository: https://github.com/NVIDIA/OptiX_Apps/tree/master/data
