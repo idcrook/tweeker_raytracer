@@ -27,7 +27,7 @@
 
 cmake_minimum_required(VERSION 3.11)
 
-project( optix7Gui )
+project( Optix7Gui )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
@@ -42,8 +42,8 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
-message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+# message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+# message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
 cmake_policy(VERSION 3.11)
 
@@ -105,20 +105,6 @@ if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
   include_directories( ${OPENGL_INCLUDE_DIR} )
 endif()
 
-
-# set( IMGUI
-#   imgui/imconfig.h
-#   imgui/imgui.h
-#   imgui/imgui_impl_glfw_gl3.h
-#   imgui/imgui_internal.h
-#   imgui/stb_rect_pack.h
-#   imgui/stb_textedit.h
-#   imgui/stb_truetype.h
-#   imgui/imgui.cpp
-#   imgui/imgui_demo.cpp
-#   imgui/imgui_draw.cpp
-#   imgui/imgui_impl_glfw_gl3.cpp
-# )
 
 set( IMGUI
   bindings/imgui_impl_glfw.h
@@ -254,8 +240,8 @@ target_link_libraries( optix7Gui
   ${ILUT_LIBRARIES}
 )
 
-# if (UNIX)
-#   target_link_libraries( optix7Gui dl)
-# endif()
+if (UNIX)
+  target_link_libraries( optix7Gui dl)
+endif()
 
 # set_target_properties( optix7Gui PROPERTIES FOLDER "apps")

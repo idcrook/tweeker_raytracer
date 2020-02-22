@@ -1,6 +1,7 @@
 cmake_minimum_required ( VERSION 3.11 )
 
 project ( OptixGui VERSION 0.1.0  )
+message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
 # set to match your path
 set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
@@ -30,8 +31,8 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
-message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+# message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+# message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
@@ -45,7 +46,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
-  find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
+  #find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
 
   # Defines OptiX utilities and variables
   INCLUDE(configure_optix)

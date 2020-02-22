@@ -5,39 +5,27 @@ Using conan as C++ dependency manager
 2.	Clone this repo:
 3.	Install dependencies (via `conan`), compile and run
 
-### install devil
-
-http://openil.sourceforge.net/
-
-installing `dev` also installs the lib
-
-```
-sudo apt install libdevil-dev
-```
+Assumes DevIL headers and library are installed on system.
 
 ### Point to samples directory
 
-Relies upon directory from this repository: https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/data
+Expects textures from this repository: https://github.com/NVIDIA/OptiX_Apps/tree/master/data
 
-Can use envariable `OPTIX_SAMPLES_SDK_DIR` to point to a clone, or even symlink `data` directory
+Can use symlink `data` directory
 
 ```
-export OPTIX_SAMPLES_SDK_DIR=/path/to/optix_advanced_samples/src
-
-# or, in a clone of this repo, symlink to the data directory inside project directory
-
-cd src/OptixGui
-ln -s /path/to/optix_advanced_samples/src/data data
+cd src/Optix7Gui
+ln -s /path/to/OptiX_Apps/data data
 ```
 
 Linux
 -----
 
-Any build will require pointing to SDK.
+Any build will require pointing to SDK. Not yet working from top-level CMake.
 
 ```bash
 # navigate to top-level of this repo, then:
-cd src/OptixGui
+cd src/Optix7Gui
 mkdir build
 cd build
 
@@ -55,8 +43,8 @@ conan remote remove bincrafters
 
 cmake --build . --target optix7Gui --parallel 7
 
-# do not need anymore # LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optixGui
-./optixGui
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
+./optix7Gui
 
 ```
 
@@ -65,24 +53,22 @@ cmake --build . --target optix7Gui --parallel 7
 ```
 conan install .. -s build_type=Debug
 # run generate
-cmake \
-    -DOptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \
-    -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
     -B . ..
 
-cmake --build . --target optixGui --parallel 7
+cmake --build . --target optix7Gui --parallel 7
 
-# do not need anymore # LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optixGui
-./optixGui
+# LD_LIBRARY_PATH needed so that system Nvidia opengl drivers are used
+LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
 
 ```
 
 setting up in cuda-gdb
 
 ```shell
-cd /home/dpc/projects/learning/rt/tweeker_feature/src/OptixGui/build
-file optixGui
-#  do not need anymore # set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
+cd /home/dpc/projects/learning/rt/tweeker_raytracer/src/Optix7Gui/build
+file optix7Gui
+set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
 run
 ```

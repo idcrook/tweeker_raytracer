@@ -14,4 +14,4 @@ SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 # push CMake configs to each subdirectory
 ADD_SUBDIRECTORY( OptixGui )
 
-ADD_SUBDIRECTORY( Optix7Gui )
+# ADD_SUBDIRECTORY( Optix7Gui )
