@@ -58,7 +58,6 @@ endif()
 # CONFIG option is important so CMake does not search for modules into the default modules directory
 find_package(imgui CONFIG)
 find_package(glfw CONFIG)
-#find_package(glad CONFIG)
 find_package(glew CONFIG)
 
 # see above for GLVND note
@@ -193,7 +192,6 @@ function(OPTIX_add_sample_executable target_name)
     sutil_sdk
     OpenGL::GL
     imgui::imgui
-    #glad::glad
     glew::glew
     glfw::glfw
     ${optix_LIBRARY}
@@ -201,8 +199,10 @@ function(OPTIX_add_sample_executable target_name)
     ${ILU_LIBRARIES}
     ${ILUT_LIBRARIES}
     )
-  # # are using GLAD opengl loader
-  # target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+
+  message("optix_LIBRARY =      " "${optix_LIBRARY}")
+  #message("OPENGL_gl_LIBRARY    = " OpenGL::GL)
+
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
@@ -210,6 +210,7 @@ function(OPTIX_add_sample_executable target_name)
     target_link_libraries( ${target_name} m ) # Explicitly link against math library (C samples don't do that by default)
   endif()
 endfunction()
+
 
 
 # Our sutil library.  The rules to build it are found in the subdirectory.

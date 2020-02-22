@@ -5,8 +5,6 @@ Experimental raytracing test bed.
 
 ![intro Optix 10 - denoiser and env](assets/img/intro_10_altenv_light_1024pp.png)
 
-Applications:
-
 Name is a play on my earlier project `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
 
 Pre-requisites
@@ -24,7 +22,7 @@ Uses conan as C++ dependency manager. In general this means
 
 1.	Install conan: https://docs.conan.io/en/latest/installation.html
 2.	Clone this repo
-3.	Install dependencies using conan or
+3.	Install dependencies using conan or system package manager
 	-	Generate dependency package cmake includes (via `conan`\)
 	-	Use CMake to generate Makefiles
 	-	Use cmake to compile/build project sources and libs

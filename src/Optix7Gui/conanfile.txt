@@ -2,7 +2,7 @@
 imgui/1.75
 glfw/3.3.2@bincrafters/stable
 glew/2.1.0@bincrafters/stable
-#assimp/5.0.1
+assimp/5.0.1
 
 [generators]
 cmake_find_package_multi

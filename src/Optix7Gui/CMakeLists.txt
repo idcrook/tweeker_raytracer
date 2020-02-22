@@ -30,11 +30,7 @@ cmake_minimum_required(VERSION 3.11)
 project( Optix7Gui )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-
-# needed for conan link_directories  imgui::imgui, etc.
+# needed for conan cmake includes, link_directories like imgui::imgui, etc.
 set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
 
 set(CMAKE_MODULE_PATH
@@ -60,29 +56,49 @@ endif()
 # Use the NVCUDA_COMPILE_PTX function to produce the desired custom rule and output filenames when compiling OptiX programs from *.cu to *.ptx.
 include("nvcuda_compile_ptx")
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-if(UNIX)
-  set(OS "linux")
-  add_definitions("-DLINUX")
-  add_definitions("-Wno-unused-local-typedefs -Wno-delete-non-virtual-dtor")
-  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
-else(UNIX)
-  if(APPLE)
-  else(APPLE)
-    if(WIN32)
-      set(OS "win")
-      add_definitions("-DNOMINMAX")
-    endif(WIN32)
-  endif(APPLE)
-endif(UNIX)
+# if(UNIX)
+#   set(OS "linux")
+#   add_definitions("-DLINUX")
+#   add_definitions("-Wno-unused-local-typedefs -Wno-delete-non-virtual-dtor")
+#   SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+# else(UNIX)
+#   if(APPLE)
+#   else(APPLE)
+#     if(WIN32)
+#       set(OS "win")
+#       add_definitions("-DNOMINMAX")
+#     endif(WIN32)
+#   endif(APPLE)
+# endif(UNIX)
 
+# Set to c++14
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
-# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+# include(CheckLanguage)
+# check_language(CUDA)
+# if(CMAKE_CUDA_COMPILER)
+#   enable_language(CUDA)
+#   if(NOT DEFINED CMAKE_CUDA_STANDARD)
+#     set(CMAKE_CUDA_STANDARD 14)
+#     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+#   endif()
+#   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
+#   #find_package(CUDA 10.0 REQUIRED)
+# else()
+#   message(STATUS "No CUDA support")
+# endif()
+
+
+# SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+# SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
@@ -91,13 +107,13 @@ set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 find_package(imgui CONFIG)
 find_package(glfw CONFIG)
 find_package(glew CONFIG)
+find_package(assimp CONFIG)
 
 
 find_package(OpenGL REQUIRED)
-# find_package(GLFW REQUIRED)
-# find_package(GLEW REQUIRED)
 find_package(OptiX7 REQUIRED)
 find_package(CUDA 10.0 REQUIRED)
+message(STATUS "Found CUDA ${CUDA_VERSION_STRING} at ${CUDA_TOOLKIT_ROOT_DIR}")
 #find_package(DevIL_1_8_0 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is system package on ubuntu
 
@@ -231,17 +247,16 @@ target_link_libraries( optix7Gui
   imgui::imgui
   glew::glew
   glfw::glfw
-  # ${OPENGL_gl_LIBRARY}
-  # ${GLEW_LIBRARIES}
-  # ${GLFW_LIBRARIES}
   ${CUDA_CUDA_LIBRARY}
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
 )
 
-if (UNIX)
-  target_link_libraries( optix7Gui dl)
-endif()
+message("CUDA_CUDA_LIBRARY    = " "${CUDA_CUDA_LIBRARY}")
+
+# if (UNIX)
+#   target_link_libraries( optix7Gui dl)
+# endif()
 
 # set_target_properties( optix7Gui PROPERTIES FOLDER "apps")
