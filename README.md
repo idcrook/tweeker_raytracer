@@ -110,3 +110,5 @@ Image renders and screencaps from `optixGui`
 
 Image renders and screencaps from `optix7Gui`
 ---------------------------------------------
+
+![OptiX 7 - compare to optix 6](assets/img/optix7_compare.png) optix7Gui, alternate environment, light, running in app.
