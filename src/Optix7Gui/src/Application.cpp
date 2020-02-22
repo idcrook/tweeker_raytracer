@@ -192,6 +192,8 @@ Application::Application(GLFWwindow* window,
 {
   m_width   = std::max(1, options.getClientWidth());
   m_height  = std::max(1, options.getClientHeight());
+  //m_devicesEncoding = options.getDevicesEncoding();
+  //m_stackSize = options.getStackSize();
   m_interop = options.getInterop();
 
   m_lightID = options.getLight();

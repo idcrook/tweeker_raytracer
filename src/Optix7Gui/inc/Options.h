@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,23 +41,36 @@ public:
 
   bool parseCommandLine(int argc, char *argv[]);
 
-  int         getClientWidth() const;
-  int         getClientHeight() const;
-  bool        getInterop() const;
-  int         getLight() const;
-  int         getMiss() const;
-  std::string getEnvironment() const;
+  int          getClientWidth() const;
+  int          getClientHeight() const;
+  unsigned int getDevicesEncoding() const;
+  unsigned int getStackSize() const;
+  bool         getInterop() const;
+  int          getLight() const;
+  unsigned int getMiss() const;
+  int          getNumberSamples() const;
+  std::string  getEnvironment() const;
+  std::string  getFilenameScreenshot() const;
+  bool         hasGUI() const;
 
 private:
   void printUsage(std::string const& argv);
 
 private:
-  int         m_widthClient;
-  int         m_heightClient;
-  bool        m_interop;
-  int         m_light;
-  int         m_miss;
-  std::string m_environment;
+  int          m_verbose;
+  bool         m_debug;
+  int          m_widthClient;
+  int          m_heightClient;
+  unsigned int m_devices;
+  unsigned int m_stackSize;
+  bool         m_interop;
+  int          m_light;
+  int          m_miss;
+  int          m_numberSamples;
+  std::string  m_environment;
+  std::string  m_filenameScreenshot;
+
+  bool         m_hasGUI;
 };
 
 #endif // APPLICATION_OPTIONS_H

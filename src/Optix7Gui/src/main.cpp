@@ -37,6 +37,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
+#include <iomanip>
 
 
 static Application* g_app = nullptr;
@@ -48,6 +50,44 @@ static void error_callback(int error, const char* description)
   std::cerr << "Error: "<< error << ": " << description << std::endl;
 }
 
+//------------------------------------------------------------------------------
+//
+//  GLFW callbacks
+//
+//------------------------------------------------------------------------------
+
+// imgui will chain this in before it handles
+void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mods )
+{
+  static unsigned int saveCount = 0;
+
+  if( action == GLFW_PRESS )
+  {
+    switch( key )
+    {
+
+    case GLFW_KEY_Q:  // Set state to exit app
+    {
+      glfwSetWindowShouldClose(window, 1);
+      break;
+    }
+
+    case( GLFW_KEY_P ): // Snap screen shot, incrementing filename each time
+    {
+      std::stringstream filename;
+      filename << "screenshot_"
+               << std::setw(2) << std::setfill('0') << ++saveCount
+               << ".png";
+      const std::string outputImage = filename.str();
+      std::cerr << "TODO: Saving current frame to '" << outputImage << "'\n";
+      //g_app->screenshot(outputImage);
+      break;
+    }
+    } // end switch( key )
+  }
+
+}
+
 
 int runApp(Options const& options)
 {
@@ -55,8 +95,8 @@ int runApp(Options const& options)
   int heightClient = std::max(1, options.getClientHeight());
 
   //glfwWindowHint(GLFW_DECORATED, windowBorder);
-
-  GLFWwindow* window = glfwCreateWindow(widthClient, heightClient, "optix7Gui - Copyright (c) 2020 NVIDIA Corporation", NULL, NULL);
+  //  "optix7Gui - Copyright (c) 2020 NVIDIA Corporation"
+  GLFWwindow* window = glfwCreateWindow(widthClient, heightClient, "optix7Gui", NULL, NULL);
   if (!window)
   {
     error_callback(APP_ERROR_CREATE_WINDOW, "glfwCreateWindow() failed.");
@@ -72,6 +112,9 @@ int runApp(Options const& options)
     glfwTerminate();
     return APP_ERROR_GLEW_INIT;
   }
+
+  // Note: imgui now saves and chains any glfw callbacks registered
+  glfwSetKeyCallback( window, keyCallback );
 
   ilInit(); // Initialize DevIL once.
 

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,16 +30,39 @@
 #include "inc/Options.h"
 
 #include <iostream>
+#include <stdexcept>
+
+// Parse command line arguments and options
+#include "inc/Options.h"
+#include "inc/InputParser.h"
+
+#define NSamples_DEFAULT  (64)
+#define NSamples_MAX      (1024)
+
+// Assign default GUI window size
+#define GUI_WINDOW_DEFAULT_STARTING_Nx  (1280)
+#define GUI_WINDOW_DEFAULT_STARTING_Ny  ( 720)
+
+#define NOptix_Stack_Size_DEFAULT       (1024)
+#define NMiss_Shader_DEFAULT            (1)
+#define NMiss_Shader_MAX                (2)    // Range [0 .. NMiss_Shader_MAX]
 
 // public:
 
 Options::Options()
-: m_widthClient(512)
-, m_heightClient(512)
-, m_interop(true)
-, m_light(0)
-, m_miss(1)
+  : m_verbose(0)
+  , m_debug(false)
+  , m_widthClient(GUI_WINDOW_DEFAULT_STARTING_Nx)
+  , m_heightClient(GUI_WINDOW_DEFAULT_STARTING_Ny)
+  , m_devices(3210)              // Decimal digits encode OptiX device ordinals. Default 3210 means to use all four first installed devices, when available.
+  , m_interop(true)              // Use OpenGL interop Pixel-Bufferobject to display the resulting image. Disable this when running on multi-GPU or TCC driver mode.
+  , m_light(0)                   // Add a geometric area light. Best used with miss 0 and 1.
+  , m_miss(NMiss_Shader_DEFAULT) // Select the environment light (0 = black, no light; 1 = constant white environment; 2 = spherical environment texture.
+  , m_numberSamples(NSamples_DEFAULT)  // Number of samples per pixel to collect when saving to file from command line.
+  , m_stackSize(NOptix_Stack_Size_DEFAULT)  // Command line parameter just to be able to find the smallest working size.
 //, m_environment is std::string().
+//, m_filenameScreenshot is std::string()
+  , m_hasGUI(true)
 {
 }
 
@@ -49,80 +72,172 @@ Options::~Options()
 
 bool Options::parseCommandLine(int argc, char *argv[])
 {
-  for (int i = 1; i < argc; ++i)
-  {
-    const std::string arg(argv[i]);
+  int exit_code = EXIT_SUCCESS;
 
-    if (arg == "?" || arg == "help" || arg == "--help")
-    {
-      printUsage(std::string(argv[0])); // Application name.
-      return false;
-    }
-    else if (arg == "-w" || arg == "--width")
-    {
-      if (i == argc - 1)
-      { 
-        std::cerr << "Option '" << arg << "' requires additional argument.\n";
-        printUsage(argv[0]);
-        return false;
-      }
-      m_widthClient = atoi(argv[++i]);
-    }
-    else if (arg == "-n" || arg == "--nopbo")
-    {
-      m_interop = false;
-    }
-    else if (arg == "-h" || arg == "--height")
-    {
-      if (i == argc - 1)
-      { 
-        std::cerr << "Option '" << arg << "' requires additional argument.\n";
-        printUsage(argv[0]);
-        return false;
-      }
-      m_heightClient = atoi(argv[++i]);
-    }
-    else if (arg == "-l" || arg == "--light")
-    {
-      // Prepared for different light setups.
-      //if (i == argc - 1)
-      //{ 
-      //  std::cerr << "Option '" << arg << "' requires additional argument.\n";
-      //  printUsage(argv[0]);
-      //  return false;
-      //}
-      //m_light = atoi(argv[++i]);
-      m_light = 1;
-    }
-    else if (arg == "-m" || arg == "--miss")
-    {
-      if (i == argc - 1)
-      { 
-        std::cerr << "Option '" << arg << "' requires additional argument.\n";
-        printUsage(argv[0]);
-        return false;
-      }
-      m_miss = atoi(argv[++i]);
-    }
-    else if (arg == "-e" || arg == "--env")
-    {
-      if (i == argc - 1)
-      { 
-        std::cerr << "Option '" << arg << "' requires additional argument.\n";
-        printUsage(argv[0]);
-        return false;
-      }
-      m_environment = std::string(argv[++i]);
-    }
-    else
-    {
-      std::cerr << "Unknown option '" << arg << "'\n";
-      printUsage(argv[0]);
-      return false;
-    }
+  std::vector <std::string> sameOptionList;
+  InputParser cl_input(argc, argv);
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-h"); sameOptionList.push_back("--help");
+  sameOptionList.push_back("?");  sameOptionList.push_back("help");
+  if (cl_input.cmdEquivalentsExist(sameOptionList) ) {
+    printUsage(argv[0]);
+    std::exit( exit_code );
   }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-v"); sameOptionList.push_back("--verbose");
+  m_verbose = cl_input.cmdEquivalentsExist(sameOptionList);
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-g"); sameOptionList.push_back("--debug");
+  m_debug = cl_input.cmdEquivalentsExist(sameOptionList);
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-n"); sameOptionList.push_back("--nopbo");
+  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
+    m_interop = false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-l"); sameOptionList.push_back("--light");
+  if (cl_input.cmdEquivalentsExist(sameOptionList)) {
+    m_light = 1;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-p");  sameOptionList.push_back("--samples");
+  const std::string &numberOfSamples = cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!numberOfSamples.empty()){
+      std::size_t pos;
+      int x = std::stoi(numberOfSamples, &pos);
+      if ( (x > 0) && (x <= NSamples_MAX))  {
+        m_numberSamples = x;
+      } else {
+        std::cerr << "WARNING: Number of samples " << x << " is out of range. ";
+        if (x > NSamples_MAX) {
+          m_numberSamples = NSamples_MAX;
+        }
+        std::cerr << "WARNING: Using a value of " << m_numberSamples << std::endl;
+      }
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid number of samples: " << numberOfSamples << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-w");  sameOptionList.push_back("--width");
+  const std::string &winWidth =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!winWidth.empty()){
+      std::size_t pos;
+      int x = std::stoi(winWidth, &pos);
+      m_widthClient = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid window width (--width): " << winWidth << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-e");  sameOptionList.push_back("--height");
+  const std::string &winHeight =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!winHeight.empty()){
+      std::size_t pos;
+      int x = std::stoi(winHeight, &pos);
+      m_heightClient = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid window width (--height): " << winHeight << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-d");  sameOptionList.push_back("--device");
+  const std::string &deviceString =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!deviceString.empty()){
+      std::size_t pos;
+      int x = std::stoi(deviceString, &pos);
+      m_devices = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid stack size (--stack): " << deviceString << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-k");  sameOptionList.push_back("--stack");
+  const std::string &stackSizeString =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!stackSizeString.empty()){
+      std::size_t pos;
+      int x = std::stoi(stackSizeString, &pos);
+      m_stackSize = x;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid stack size (--stack): " << stackSizeString << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-m");  sameOptionList.push_back("--miss");
+  const std::string &missShader = cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!missShader.empty()){
+      std::size_t pos;
+      int x = std::stoi(missShader, &pos);
+      if (x >= 0 and x <= NMiss_Shader_MAX) {
+        m_miss = x;
+      } else {
+        std::cerr << "WARNING: Miss shader number " << x << " out of range. Maximum: " << NMiss_Shader_MAX << std::endl;
+        std::cerr << "WARNING: Using miss shader " << m_miss << std::endl;
+      }
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid miss shader number: " << missShader << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-i");  sameOptionList.push_back("--env");
+  const std::string &envImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!envImageFile.empty()) {
+      m_environment = envImageFile;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid filename (--env): " << envImageFile << std::endl;
+    return false;
+  }
+
+  sameOptionList.clear();
+  sameOptionList.push_back("-f");  sameOptionList.push_back("--file");
+  const std::string &outputImageFile =  cl_input.getCmdEquivalentsOption(sameOptionList);
+  try {
+    if (!outputImageFile.empty()) {
+      m_filenameScreenshot = outputImageFile;
+      m_hasGUI = false;
+    }
+  } catch (std::invalid_argument const &ex) {
+    printUsage(argv[0]);
+    std::cerr << "ERROR: Invalid filename (--file): " << outputImageFile << std::endl;
+    return false;
+  }
+
   return true;
 }
+
 
 int Options::getClientWidth() const
 {
@@ -134,6 +249,16 @@ int Options::getClientHeight() const
   return m_heightClient;
 }
 
+// unsigned int Options::getDevicesEncoding() const
+// {
+//   return m_devices;
+// }
+
+// unsigned int Options::getStackSize() const
+// {
+//   return m_stackSize;
+// }
+
 bool Options::getInterop() const
 {
   return m_interop;
@@ -144,9 +269,14 @@ int Options::getLight() const
   return m_light;
 }
 
-int Options::getMiss() const
+unsigned int Options::getMiss() const
 {
   return m_miss;
+}
+
+int Options::getNumberSamples() const
+{
+  return m_numberSamples;
 }
 
 std::string Options::getEnvironment() const
@@ -154,22 +284,46 @@ std::string Options::getEnvironment() const
   return m_environment;
 }
 
-
-// private:
-
-void Options::printUsage(std::string const& argv0)
+std::string Options::getFilenameScreenshot() const
 {
-  std::cerr << "\nUsage: " << argv0 << " [options]\n";
+  return m_filenameScreenshot;
+}
+
+bool Options::hasGUI() const
+{
+  return m_hasGUI;
+}
+
+void Options::printUsage(const std::string& argv0)
+{
+  std::cerr << std::endl << "Usage: " << argv0 << " [options]" << std::endl;
+  std::cerr << R"(
+App Options:
+  -h | --help | help   Print this usage message and exit.
+  -v | --verbose       Verbose output. TBD
+  -g | --debug         Debug output. TBD
+
+)";
   std::cerr <<
-    "App Options:\n"
-    "   ? | help | --help    Print this usage message and exit.\n"
-    "  -w | --width <int>    Width of the client window  (512)\n"
-    "  -h | --height <int>   Height of the client window (512)\n"
-    "  -l | --light          Add an area light to the scene.\n"
-    "  -m | --miss <0|1|2>   Select the miss shader (0 = black, 1 = white, 2 = HDR texture.\n"
-    "  -e | --env <filename> Filename of a spherical HDR texture. Use with --miss 2.\n"
-  "App Keystrokes:\n"
-  "  SPACE  Toggles ImGui display.\n"
-  "\n"
-  << std::endl;
+    "  -w | --width <int>   GUI Window client width.  (default: "     << m_widthClient << ')' << std::endl <<
+    "  -e | --height <int>  GUI Window client height. (default: "     << m_heightClient << ')' << std::endl <<
+//    "  -d | --devices <int> OptiX device selection, each decimal digit selects one device (default: " << m_devices << ')' << std::endl <<
+    "  -n | --nopbo         Disable OpenGL interop for the image display. "    << std::endl <<
+    "  -l | --light         Add an area light to the scene. "                  << std::endl <<
+    "  -m | --miss  <0|1|2> Select the miss shader. (0 = black, 1 = white, 2 = HDR texture) (default: " << m_miss << ')' << std::endl <<
+    "    -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << m_environment << ')' << std::endl <<
+//    "  -k | --stack <int>   Set the OptiX stack size (debug feature). (default: " << m_stackSize << ')' << std::endl <<
+    ""  << std::endl <<
+    "TODO  -f | --file <filename> Save image to file and exit."  << std::endl <<
+//    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << m_numberSamples << ", max: " << NSamples_MAX << ')' << std::endl <<
+    "";
+
+  std::cerr << R"(
+App Keystrokes:
+  SPACE  Toggles ImGui display.
+TODO  p      Snapshot of current image to file.
+  q      Quits the App.
+
+)";
+
 }

@@ -329,7 +329,8 @@ private:
   //int m_heightLaunch;
 
   // Application command line parameters.
-  //unsigned int m_devicesEncoding;
+  // unsigned int m_devicesEncoding;
+  // unsigned int m_stackSize;
   int         m_lightID;
   int         m_missID;
   std::string m_environmentFilename;
