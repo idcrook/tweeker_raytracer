@@ -102,6 +102,36 @@ cd tweeker_raytracer # top-level directory again
 build/optixGui [options]
 ```
 
+try with Releaase build
+-----------------------
+
+```shell
+# navigate to repo clone
+cd tweeker_raytracer
+cd src/OptixGui
+mkdir build
+cd build
+
+# workaround for broken (as of 15-Feb-2020) libX11 dependency in conan's main remote
+conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan | true
+
+# run conan which will download libraries, and create cmake module includes
+conan install .. -s build_type=Release
+
+# remove workaround remote, if desired
+conan remote remove bincrafters
+
+# Now, run CMake generate stage at top-level
+cd ../../../../tweeker_raytracer/
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
+ -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
+ -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
+ -B build src
+
+# Build binary target
+cmake --build build --target optixGui --parallel 7
+```
+
 Image renders and screencaps from `optixGui`
 --------------------------------------------
 
