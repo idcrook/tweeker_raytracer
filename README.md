@@ -3,7 +3,7 @@ tweeker_raytracer
 
 Experimental raytracing test bed.
 
-![intro Optix 10 - denoiser and env](assets/img/intro_10_altenv_light_1024pp.png)
+![OptiX 7 - scene](assets/img/optix7_running.png)
 
 Name is a play on my earlier project `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
 
@@ -107,3 +107,6 @@ Image renders and screencaps from `optixGui`
 ![intro Optix 09 - denoiser on](assets/img/intro_09_denoise_on_8pp.png) denoiser ON, 8 samples per pixel
 
 ![intro Optix 10 - denoiser and env](assets/img/intro_10_altenv_light_1024pp.png) Alternate environment, light, 1k samples per pixel
+
+Image renders and screencaps from `optix7Gui`
+---------------------------------------------
