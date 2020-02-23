@@ -38,6 +38,7 @@ cd build
 # workaround for busted main repo libx11
 conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan | true
 
+conan install .. -s build_type=Debug
 conan install .. -s build_type=Release
 
 # if you are only interested in this app from the repo
@@ -78,6 +79,7 @@ Note that builds using `build_type=Release` (`conan`) and `-D CMAKE_BUILD_TYPE=R
 ### Debug build
 
 ```
+# in case you have not run it yet
 conan install .. -s build_type=Debug
 
 # run generate
