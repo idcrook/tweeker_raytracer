@@ -30,17 +30,6 @@ cmake_minimum_required(VERSION 3.11)
 project( Optix7Gui )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
-# needed for conan cmake includes, link_directories like imgui::imgui, etc.
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
-
-set(CMAKE_MODULE_PATH
-  "${CMAKE_CURRENT_SOURCE_DIR}/../CMake"
-  ${CMAKE_MODULE_PATH}
-  )
-
-# message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
-# message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
-
 cmake_policy(VERSION 3.11)
 
 if( POLICY CMP0072 )
@@ -52,6 +41,24 @@ endif()
 #   # find_package uses <PackageName>_ROOT variables.
 #   cmake_policy(SET CMP0074 NEW)
 # endif()
+
+# # needed for conan cmake includes, link_directories like imgui::imgui, etc.
+# set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
+
+# needed for local conan link_directories  imgui::imgui, etc.
+set(CMAKE_PREFIX_PATH
+  # "${CMAKE_CURRENT_SOURCE_DIR}/build"
+  "${CMAKE_CURRENT_BINARY_DIR}"  # works when called locally or from top-level
+  ${CMAKE_PREFIX_PATH}
+  )
+
+set(CMAKE_MODULE_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/../CMake"
+  ${CMAKE_MODULE_PATH}
+  )
+
+message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
 # Use the NVCUDA_COMPILE_PTX function to produce the desired custom rule and output filenames when compiling OptiX programs from *.cu to *.ptx.
 include("nvcuda_compile_ptx")
@@ -92,16 +99,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # endif()
 
 
-# SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-# SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-# SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
-# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
-# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-
-#set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
+set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+#set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
 
 # related to conan
 # CONFIG option is important so CMake does not search for modules into the default modules directory

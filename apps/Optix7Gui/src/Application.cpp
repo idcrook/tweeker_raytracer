@@ -1554,8 +1554,13 @@ OptixTraversableHandle Application::createGeometry(std::vector<VertexAttributes>
 }
 
 
-std::string Application::readPTX(std::string const& filename)
+std::string Application::readPTX(std::string const& base_filename)
 {
+
+  // FIXME: hard-coded
+  const std::string pathPrefix = "./bin/optix7gui_core/";
+  std::string filename =  pathPrefix + base_filename;
+
   std::ifstream inputPtx(filename);
 
   if (!inputPtx)
@@ -1895,7 +1900,7 @@ void Application::initPipeline()
   memset(&programGroupOptions, 0, sizeof(OptixProgramGroupOptions) );
 
   // RAYGENERATION
-  std::string ptxRaygeneration = readPTX("./optix7gui_core/raygeneration.ptx");
+  std::string ptxRaygeneration = readPTX("raygeneration.ptx");
 
   OptixModule moduleRaygeneration;
 
@@ -1915,7 +1920,7 @@ void Application::initPipeline()
   OPTIX_CHECK( m_api.optixProgramGroupCreate(m_context, &programGroupDescRaygeneration, 1, &programGroupOptions, nullptr, nullptr, &programGroupRaygeneration ) );
 
   // EXCEPTION
-  std::string ptxException = readPTX("./optix7gui_core/exception.ptx");
+  std::string ptxException = readPTX("exception.ptx");
 
   OptixModule moduleException;
 
@@ -1936,7 +1941,7 @@ void Application::initPipeline()
   // RADIANCE RAY TYPE
 
   // MISS
-  std::string ptxMiss = readPTX("./optix7gui_core/miss.ptx");
+  std::string ptxMiss = readPTX("miss.ptx");
 
   OptixModule moduleMiss;
 
@@ -1967,8 +1972,8 @@ void Application::initPipeline()
   OPTIX_CHECK( m_api.optixProgramGroupCreate(m_context, &programGroupDescMissRadiance, 1, &programGroupOptions, nullptr, nullptr, &programGroupMissRadiance ) );
 
   // CLOSESTHIT, ANYHIT, INTERSECTION (hit group)
-  std::string ptxClosesthit = readPTX("./optix7gui_core/closesthit.ptx");
-  std::string ptxAnyhit     = readPTX("./optix7gui_core/anyhit.ptx");
+  std::string ptxClosesthit = readPTX("closesthit.ptx");
+  std::string ptxAnyhit     = readPTX("anyhit.ptx");
 
   OptixModule moduleClosesthit;
   OptixModule moduleAnyhit;
@@ -2038,11 +2043,11 @@ void Application::initPipeline()
 
   // DIRECT CALLABLES
 
-  std::string ptxLensShader                     = readPTX("./optix7gui_core/lens_shader.ptx");
-  std::string ptxLightSample                    = readPTX("./optix7gui_core/light_sample.ptx");
-  std::string ptxDiffuseReflection              = readPTX("./optix7gui_core/bsdf_diffuse_reflection.ptx");
-  std::string ptxSpecularReflection             = readPTX("./optix7gui_core/bsdf_specular_reflection.ptx");
-  std::string ptxSpecularReflectionTransmission = readPTX("./optix7gui_core/bsdf_specular_reflection_transmission.ptx");
+  std::string ptxLensShader                     = readPTX("lens_shader.ptx");
+  std::string ptxLightSample                    = readPTX("light_sample.ptx");
+  std::string ptxDiffuseReflection              = readPTX("bsdf_diffuse_reflection.ptx");
+  std::string ptxSpecularReflection             = readPTX("bsdf_specular_reflection.ptx");
+  std::string ptxSpecularReflectionTransmission = readPTX("bsdf_specular_reflection_transmission.ptx");
 
   OptixModule moduleLensShader;
   OptixModule moduleLightSample;
