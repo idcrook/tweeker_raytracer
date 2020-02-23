@@ -1,7 +1,9 @@
 cmake_minimum_required ( VERSION 3.11 )
 
+
 project ( OptixGui VERSION 0.1.0  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
+message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
 
 # set to match your path
 set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
@@ -83,11 +85,13 @@ conan_cmake_run(
 
 # needed for local conan link_directories  imgui::imgui, etc.
 set(CMAKE_PREFIX_PATH
-  "${CMAKE_CURRENT_SOURCE_DIR}/build"
+  # "${CMAKE_CURRENT_SOURCE_DIR}/build"
+  "${CMAKE_CURRENT_BINARY_DIR}"  # works when called locally or from top-level
   ${CMAKE_PREFIX_PATH}
   )
 
 #message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+#message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
 #message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
 
@@ -194,6 +198,9 @@ message("OptiX_INCLUDE    = " "${OptiX_INCLUDE}")
 
 set(SAMPLES_PTX_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 set(SAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+message("SAMPLES_PTX_DIR    = " "${SAMPLES_PTX_DIR}")
+message("SAMPLES_DIR        = " "${SAMPLES_DIR}")
 
 set(CUDA_GENERATED_OUTPUT_DIR ${SAMPLES_PTX_DIR})
 
