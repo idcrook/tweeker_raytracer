@@ -4,13 +4,17 @@ project ( OptixGui VERSION 0.1.0  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
 # set to match your path
-set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
-  CACHE PATH "Path to OptiX installed location.")
+# set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
+#   CACHE PATH "Path to OptiX installed location.")
 # can override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 
 
 # needed for conan link_directories  imgui::imgui, etc.
 set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
+
+# find_package will search CONFIG before MODULE with this turned ON
+set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+
 
 # As of CMake 2.6 policies were introduced in order to provide a mechanism for
 cmake_policy(VERSION 3.11)
@@ -20,10 +24,10 @@ if( POLICY CMP0072 )
   cmake_policy(SET CMP0072 NEW)
 endif()
 
-if( POLICY CMP0074 )
-  # find_package uses <PackageName>_ROOT variables.
-  cmake_policy(SET CMP0074 NEW)
-endif()
+# if( POLICY CMP0074 )
+#   # find_package uses <PackageName>_ROOT variables.
+#   cmake_policy(SET CMP0074 NEW)
+# endif()
 
 set(CMAKE_MODULE_PATH
   #    "${PROJECT_SOURCE_DIR}/CMake"
@@ -54,21 +58,27 @@ else()
   message(STATUS "No CUDA support")
 endif()
 
-# related to conan
-# CONFIG option is important so CMake does not search for modules into the default modules directory
-find_package(imgui CONFIG)
-find_package(glfw CONFIG)
-find_package(glew CONFIG)
+# These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
+find_package(imgui REQUIRED)
+find_package(glfw REQUIRED)
+find_package(glew REQUIRED)
 
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
 
-# image loading
+# image loading - expect system developer package to be installed
 find_package(DevIL REQUIRED)
+
 
 if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
   include_directories( ${OPENGL_INCLUDE_DIR} )
 endif()
+
+# message("OPENGL_FOUND          = " " ${OPENGL_FOUND}")
+# message("OPENGL_INCLUDE_DIR    = " " ${OPENGL_INCLUDE_DIR}")
+# message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+# message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+# message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
 
 # for local source includes and devil
 INCLUDE_DIRECTORIES(
@@ -190,7 +200,8 @@ function(OPTIX_add_sample_executable target_name)
   # rule that specifies this linkage.
   target_link_libraries(  ${target_name}
     sutil_sdk
-    OpenGL::GL
+    # OpenGL::GL
+    OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
     imgui::imgui
     glew::glew
     glfw::glfw
@@ -201,7 +212,7 @@ function(OPTIX_add_sample_executable target_name)
     )
 
   message("optix_LIBRARY =      " "${optix_LIBRARY}")
-  #message("OPENGL_gl_LIBRARY    = " OpenGL::GL)
+  message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
 
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)

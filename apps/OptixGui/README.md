@@ -36,6 +36,9 @@ mkdir build
 cd build
 
 # workaround for busted main repo libx11
+##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
+##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
+
 conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan | true
 
 conan install .. -s build_type=Debug
@@ -44,11 +47,12 @@ conan install .. -s build_type=Release
 # if you are only interested in this app from the repo
 #cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake \
-    -DOptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+    -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
     -B . ..
 
+# remove workaround if desired
 conan remote remove bincrafters
 
 cmake --build . --target optixGui --parallel 7
@@ -85,7 +89,7 @@ conan install .. -s build_type=Debug
 # run generate
 # if you are only interested in this app from the repo
 cmake \
-    -DOptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+    -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
     -B . ..
