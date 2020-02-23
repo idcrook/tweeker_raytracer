@@ -50,7 +50,7 @@ Apps
 `optixGui`
 ----------
 
--	[OptixGui](src/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
+-	[OptixGui](apps/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
 
 OptiX 6.5 imgui
 
@@ -59,12 +59,12 @@ OptiX 6.5 imgui
 -	Uses DevIL image library
 -	Assumes [optix_advanced_samples](https://github.com/nvpro-samples/optix_advanced_samples) repo is available for its texture files
 
-See respective [README.md](src/OptixGui/README.md) for build instructions and `conanfile.txt` for dependencies.
+See respective [README.md](apps/OptixGui/README.md) for build instructions and `conanfile.txt` for dependencies.
 
 `optix7Gui`
 -----------
 
--	[Optix7Gui](src/Optix7Gui) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/intro_denoiser
+-	[Optix7Gui](apps/Optix7Gui) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/intro_denoiser
 
 OptiX 7 imgui
 
@@ -73,15 +73,15 @@ OptiX 7 imgui
 -	Uses DevIL image library
 -	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for its texture files
 
-See respective [README.md](src/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
+See respective [README.md](apps/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
 
 Build
 -----
 
 Refer to
 
--	[OptixGui README](src/OptixGui/README.md)
--	[Optix7Gui README](src/Optix7Gui/README.md)
+-	[OptixGui README](apps/OptixGui/README.md)
+-	[Optix7Gui README](apps/Optix7Gui/README.md)
 
 ### Run
 

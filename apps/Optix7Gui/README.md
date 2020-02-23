@@ -19,7 +19,7 @@ Expects textures from this repository: https://github.com/NVIDIA/OptiX_Apps/tree
 Can use symlink `data` directory
 
 ```
-cd src/Optix7Gui
+cd apps/Optix7Gui
 ln -s /path/to/OptiX_Apps/data data
 ```
 
@@ -30,7 +30,7 @@ Any build will require pointing to SDK. Not yet working from top-level CMake.
 
 ```bash
 # navigate to top-level of this repo, then:
-cd src/Optix7Gui
+cd apps/Optix7Gui
 mkdir build
 cd build
 
