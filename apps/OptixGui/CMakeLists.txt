@@ -4,16 +4,9 @@ project ( OptixGui VERSION 0.1.0  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
 # set to match your path
-# set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
-#   CACHE PATH "Path to OptiX installed location.")
+set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
+  CACHE PATH "Path to OptiX installed location.")
 # can override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
-
-
-# needed for conan link_directories  imgui::imgui, etc.
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
-
-# find_package will search CONFIG before MODULE with this turned ON
-set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
 
 
 # As of CMake 2.6 policies were introduced in order to provide a mechanism for
@@ -35,9 +28,6 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-# message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
-# message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
-
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
 
@@ -58,10 +48,64 @@ else()
   message(STATUS "No CUDA support")
 endif()
 
+
+##################################################################
+# conan config and install dependencies
+#
+
+# Download automatically, you can also just copy the conan.cmake file
+if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+   message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+   file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/master/conan.cmake"
+                  "${CMAKE_BINARY_DIR}/conan.cmake")
+endif()
+
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+
+# remote needed to workaround for busted main repo libx11 dependency from glfw
+##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
+##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
+
+conan_add_remote(
+  NAME bincrafters
+  URL https://api.bintray.com/conan/bincrafters/public-conan
+  )
+
+# BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
+# mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
+
+conan_cmake_run(
+  CONANFILE conanfile.txt
+  BASIC_SETUP
+  BUILD missing
+  )
+
+
+# needed for local conan link_directories  imgui::imgui, etc.
+set(CMAKE_PREFIX_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/build"
+  ${CMAKE_PREFIX_PATH}
+  )
+
+#message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+#message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+
+
+# find_package will search CONFIG before MODULE with this turned ON
+#set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+
+# debug include_directories
+
+# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+# foreach(dir ${dirs})
+#   message(STATUS "dir='${dir}'")
+# endforeach()
+
+
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
-find_package(imgui REQUIRED)
-find_package(glfw REQUIRED)
-find_package(glew REQUIRED)
+find_package(imgui CONFIG REQUIRED)
+find_package(glfw  CONFIG REQUIRED)
+find_package(glew  CONFIG REQUIRED)
 
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
@@ -84,6 +128,7 @@ endif()
 INCLUDE_DIRECTORIES(
   "."
   ${IL_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/build
   )
 
 # # Tells CMake to build all the libraries as shared libraries by default.  This can be
@@ -137,6 +182,15 @@ endif()
 
 ##################################################################
 # SUtil compilation
+#
+# - needs OptiX to be found before here
+#
+# - removed glew.h symbols deleted on transition from GLEW 2.0 -> 2.1
+#
+# - move after conan, so uses GLEW headers from 2.1 dependency
+#
+
+message("OptiX_INCLUDE    = " "${OptiX_INCLUDE}")
 
 set(SAMPLES_PTX_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 set(SAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -162,6 +216,7 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/sutil
 
 
 set(SAMPLES_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/device_include)
+
 
 #########################################################
 # OPTIX_add_sample_executable
