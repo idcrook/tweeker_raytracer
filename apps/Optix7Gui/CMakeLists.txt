@@ -58,20 +58,20 @@ include("nvcuda_compile_ptx")
 
 # set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# if(UNIX)
-#   set(OS "linux")
-#   add_definitions("-DLINUX")
-#   add_definitions("-Wno-unused-local-typedefs -Wno-delete-non-virtual-dtor")
-#   SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
-# else(UNIX)
-#   if(APPLE)
-#   else(APPLE)
-#     if(WIN32)
-#       set(OS "win")
-#       add_definitions("-DNOMINMAX")
-#     endif(WIN32)
-#   endif(APPLE)
-# endif(UNIX)
+if(UNIX)
+  set(OS "linux")
+  add_definitions("-DLINUX")
+  add_definitions("-Wno-unused-local-typedefs -Wno-delete-non-virtual-dtor")
+  SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+else(UNIX)
+  if(APPLE)
+  else(APPLE)
+    if(WIN32)
+      set(OS "win")
+      add_definitions("-DNOMINMAX")
+    endif(WIN32)
+  endif(APPLE)
+endif(UNIX)
 
 # Set to c++14
 set(CMAKE_CXX_STANDARD 14)
@@ -94,19 +94,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 # SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+# SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
-set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+#set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
 
 # related to conan
 # CONFIG option is important so CMake does not search for modules into the default modules directory
-find_package(imgui CONFIG)
-find_package(glfw CONFIG)
-find_package(glew CONFIG)
+find_package(imgui  CONFIG)
+find_package(glfw   CONFIG)
+find_package(glew   CONFIG)
 find_package(assimp CONFIG)
 
 
@@ -243,7 +244,9 @@ add_executable( optix7Gui
 
 target_link_libraries( optix7Gui
   # sutil_sdk
-  OpenGL::GL
+  #OpenGL::GL
+  OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
+  OpenGL::GLX    # Projects may use GLVND explicitly with target OpenGL::OpenGL and either OpenGL::GLX
   imgui::imgui
   glew::glew
   glfw::glfw
@@ -253,10 +256,12 @@ target_link_libraries( optix7Gui
   ${ILUT_LIBRARIES}
 )
 
-message("CUDA_CUDA_LIBRARY    = " "${CUDA_CUDA_LIBRARY}")
+message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+message("CUDA_CUDA_LIBRARY     = " "${CUDA_CUDA_LIBRARY}")
 
-# if (UNIX)
-#   target_link_libraries( optix7Gui dl)
-# endif()
+if (UNIX)
+  target_link_libraries(optix7Gui dl ${CMAKE_DL_LIBS})
+endif()
 
 # set_target_properties( optix7Gui PROPERTIES FOLDER "apps")
