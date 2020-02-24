@@ -25,9 +25,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.8)
 
-project( Optix7Gui )
+project( Optix7Gui
+  VERSION 0.1.0
+  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
 cmake_policy(VERSION 3.8)

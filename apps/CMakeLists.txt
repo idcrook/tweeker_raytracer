@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------
 # See README.md for guidance.
 #-------------------------------------------------------------------------
-cmake_minimum_required ( VERSION 3.11 )
+cmake_minimum_required ( VERSION 3.8 )
 
 project ( tweeker_raytracer
   VERSION 2.95.0

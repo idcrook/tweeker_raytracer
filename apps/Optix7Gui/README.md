@@ -34,12 +34,6 @@ cd apps/Optix7Gui
 mkdir build
 cd build
 
-# workaround for busted main repo libx11
-conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan | true
-
-conan install .. -s build_type=Release
-
-#cmake .. -DCMAKE_BUILD_TYPE=Release
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B . ..
@@ -48,9 +42,6 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B build apps
 
-conan remote remove bincrafters
-
-cmake --build . --target optix7Gui --parallel 7
 cmake --build build --target optix7Gui --parallel 7
 
 ./bin/optix7Gui || \
@@ -67,8 +58,12 @@ build/Optix7Gui/bin/optix7Gui || \
 ### Debug build
 
 ```
-conan install .. -s build_type=Debug
-# run generate
+# navigate to top-level of this repo, then:
+cd apps/Optix7Gui
+mkdir build
+cd build
+
+# run cmake generate (runs conan inside)
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \
     -B . ..
