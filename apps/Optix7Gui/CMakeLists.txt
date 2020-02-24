@@ -25,12 +25,12 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 2.8)
 
 project( Optix7Gui )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
 
-cmake_policy(VERSION 3.11)
+cmake_policy(VERSION 3.8)
 
 if( POLICY CMP0072 )
   # FindOpenGL prefers GLVND by default when available
@@ -84,16 +84,18 @@ endif(UNIX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# # Currently this project uses the deprecated CUDA find_package
 # include(CheckLanguage)
 # check_language(CUDA)
 # if(CMAKE_CUDA_COMPILER)
 #   enable_language(CUDA)
 #   if(NOT DEFINED CMAKE_CUDA_STANDARD)
-#     set(CMAKE_CUDA_STANDARD 14)
+#     set(CMAKE_CUDA_STANDARD 11)
 #     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 #   endif()
 #   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
 #   #find_package(CUDA 10.0 REQUIRED)
+#   # cmake 3.17? FindCUDAToolkit()
 # else()
 #   message(STATUS "No CUDA support")
 # endif()
@@ -106,12 +108,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 #set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
 
+message("PTX_TARGET_DIR  = " "${PTX_TARGET_DIR}")
+
+
 # related to conan
 # CONFIG option is important so CMake does not search for modules into the default modules directory
-find_package(imgui  CONFIG)
-find_package(glfw   CONFIG)
-find_package(glew   CONFIG)
-find_package(assimp CONFIG)
+find_package(imgui  CONFIG REQUIRED)
+find_package(glfw   CONFIG REQUIRED)
+find_package(glew   CONFIG REQUIRED)
+#find_package(assimp CONFIG REQUIRED)
 
 
 find_package(OpenGL REQUIRED)
@@ -119,11 +124,12 @@ find_package(OptiX7 REQUIRED)
 find_package(CUDA 10.0 REQUIRED)
 message(STATUS "Found CUDA ${CUDA_VERSION_STRING} at ${CUDA_TOOLKIT_ROOT_DIR}")
 #find_package(DevIL_1_8_0 REQUIRED)
+#find_package(DevIL_1_7_8 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is system package on ubuntu
 
-if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
-  include_directories( ${OPENGL_INCLUDE_DIR} )
-endif()
+# if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
+#   include_directories( ${OPENGL_INCLUDE_DIR} )
+# endif()
 
 
 set( IMGUI
@@ -209,15 +215,12 @@ source_group( "ptx"             FILES ${PTX_SOURCES})
 
 #message("GLEW_INCLUDE_DIRS    = " "${GLEW_INCLUDE_DIRS}")
 #message("GLFW_INCLUDE_DIR     = " "${GLFW_INCLUDE_DIR}")
-#message("CUDA_TOOLKIT_INCLUDE = " "${CUDA_TOOLKIT_INCLUDE}")
+message("CUDA_TOOLKIT_INCLUDE = " "${CUDA_TOOLKIT_INCLUDE}")
 #message("IL_INCLUDE_DIR       = " "${IL_INCLUDE_DIR}")
 
 include_directories(
   "."
-  "inc"
-  # "imgui"
-  # ${GLEW_INCLUDE_DIRS}
-  # ${GLFW_INCLUDE_DIR}
+  # "inc"
   ${OPTIX7_INCLUDE_DIR}
   ${CUDA_TOOLKIT_INCLUDE}
   ${IL_INCLUDE_DIR}
@@ -254,6 +257,7 @@ target_link_libraries( optix7Gui
   glew::glew
   glfw::glfw
   ${CUDA_CUDA_LIBRARY}
+  #CUDA::toolkit
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
@@ -261,10 +265,10 @@ target_link_libraries( optix7Gui
 
 message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
 message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-message("CUDA_CUDA_LIBRARY     = " "${CUDA_CUDA_LIBRARY}")
+message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
 
 if (UNIX)
-  target_link_libraries(optix7Gui dl ${CMAKE_DL_LIBS})
+  target_link_libraries( optix7Gui dl ${CMAKE_DL_LIBS})
 endif()
 
 # set_target_properties( optix7Gui PROPERTIES FOLDER "apps")

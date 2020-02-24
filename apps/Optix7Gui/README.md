@@ -48,8 +48,8 @@ conan remote remove bincrafters
 
 cmake --build . --target optix7Gui --parallel 7
 
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
-./optix7Gui
+./bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
 
 ```
 
@@ -65,15 +65,23 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
 cmake --build . --target optix7Gui --parallel 7
 
 # LD_LIBRARY_PATH needed so that system Nvidia opengl drivers are used
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
+
+./bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
 
 ```
 
-setting up in cuda-gdb
+setting up in `cuda-gdb`
 
 ```shell
-cd /home/dpc/projects/learning/rt/tweeker_raytracer/src/Optix7Gui/build
-file optix7Gui
+cd /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/build
+file bin/optix7Gui
 set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
 run
+```
+
+using the `cuda-gdb` for `gdb` in emacs
+
+```lisp
+(setq gud-gdb-command-name "cuda-gdb -i=mi --args ")
 ```
