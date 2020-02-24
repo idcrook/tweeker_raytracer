@@ -314,15 +314,15 @@ App Options:
     "    -i | --env <filename> Filename of a spherical HDR texture. Use with --miss 2. (default: "   << m_environment << ')' << std::endl <<
 //    "  -k | --stack <int>   Set the OptiX stack size (debug feature). (default: " << m_stackSize << ')' << std::endl <<
     ""  << std::endl <<
-    "TODO  -f | --file <filename> Save image to file and exit."  << std::endl <<
+    " TBD  -f | --file <filename> Save image to file and exit."  << std::endl <<
 //    "    -p | --samples <int>       When saving to file, sample each pixel N times. (default: " << m_numberSamples << ", max: " << NSamples_MAX << ')' << std::endl <<
     "";
 
   std::cerr << R"(
 App Keystrokes:
-  SPACE  Toggles ImGui display.
-TODO  p      Snapshot of current image to file.
-  q      Quits the App.
+  SPACE   Toggles ImGui display.
+ TBD  p   Snapshot of current image to file.
+      q   Quits the App.
 
 )";
 

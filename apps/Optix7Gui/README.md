@@ -19,7 +19,7 @@ Expects textures from this repository: https://github.com/NVIDIA/OptiX_Apps/tree
 Can use symlink `data` directory
 
 ```
-cd src/Optix7Gui
+cd apps/Optix7Gui
 ln -s /path/to/OptiX_Apps/data data
 ```
 
@@ -30,34 +30,40 @@ Any build will require pointing to SDK. Not yet working from top-level CMake.
 
 ```bash
 # navigate to top-level of this repo, then:
-cd src/Optix7Gui
+cd apps/Optix7Gui
 mkdir build
 cd build
 
-# workaround for busted main repo libx11
-conan remote add bincrafters https://api.bintray.com/conan/bincrafters/public-conan | true
-
-conan install .. -s build_type=Release
-
-#cmake .. -DCMAKE_BUILD_TYPE=Release
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B . ..
 
-conan remote remove bincrafters
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
+    -B build apps
 
-cmake --build . --target optix7Gui --parallel 7
+cmake --build build --target optix7Gui --parallel 7
 
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
-./optix7Gui
+./bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
+
+OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
+build/Optix7Gui/bin/optix7Gui || \
+  OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
+
 
 ```
 
 ### Debug build
 
 ```
-conan install .. -s build_type=Debug
-# run generate
+# navigate to top-level of this repo, then:
+cd apps/Optix7Gui
+mkdir build
+cd build
+
+# run cmake generate (runs conan inside)
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \
     -B . ..
@@ -65,15 +71,23 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
 cmake --build . --target optix7Gui --parallel 7
 
 # LD_LIBRARY_PATH needed so that system Nvidia opengl drivers are used
-LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optix7Gui
+
+./bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
 
 ```
 
-setting up in cuda-gdb
+setting up in `cuda-gdb`
 
 ```shell
-cd /home/dpc/projects/learning/rt/tweeker_raytracer/src/Optix7Gui/build
-file optix7Gui
+cd /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/build
+file bin/optix7Gui
 set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
 run
+```
+
+using the `cuda-gdb` for `gdb` in emacs
+
+```lisp
+(setq gud-gdb-command-name "cuda-gdb -i=mi --args ")
 ```

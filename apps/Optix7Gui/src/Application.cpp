@@ -60,6 +60,8 @@
 
 #include <inc/MyAssert.h>
 
+#include "PTX.h"
+
 
 #ifdef _WIN32
 // Code based on helper function in optix_stubs.h
@@ -1554,8 +1556,15 @@ OptixTraversableHandle Application::createGeometry(std::vector<VertexAttributes>
 }
 
 
-std::string Application::readPTX(std::string const& filename)
+std::string Application::readPTX(std::string const& base_filename)
 {
+  // FIXME: non-decoupled hardcoded relative path
+  std::string pathPrefix = "./bin/optix7gui_core";
+  if (const char* local_ptx_dir_p = std::getenv("OPTIX7_LOCAL_PTX_DIR")) {
+    pathPrefix = std::string(local_ptx_dir_p) ;
+  }
+  std::string filename =  pathPrefix + "/" + base_filename;
+
   std::ifstream inputPtx(filename);
 
   if (!inputPtx)
@@ -1576,6 +1585,16 @@ std::string Application::readPTX(std::string const& filename)
 
   return ptx.str();
 }
+
+std::string Application::readPTXFromInclude(unsigned char* ptx, size_t ptxBytes, const std::string& dummyFilename)
+{
+
+  std::cerr << "INFO: loading " << dummyFilename << std::endl;
+  std::string ptxString((char*)ptx, ptxBytes);
+
+  return ptxString;
+}
+
 
 // Convert the GUI material parameters to the device side structure and upload them into the m_systemParameter.materialParameters device pointer.
 void Application::updateMaterialParameters()
@@ -1895,7 +1914,8 @@ void Application::initPipeline()
   memset(&programGroupOptions, 0, sizeof(OptixProgramGroupOptions) );
 
   // RAYGENERATION
-  std::string ptxRaygeneration = readPTX("./optix7gui_core/raygeneration.ptx");
+  //std::string ptxRaygeneration = readPTX("raygeneration.ptx");
+  std::string ptxRaygeneration = readPTXFromInclude(raygeneration_ptx, sizeof(raygeneration_ptx), "raygeneration.ptx");
 
   OptixModule moduleRaygeneration;
 
@@ -1915,7 +1935,8 @@ void Application::initPipeline()
   OPTIX_CHECK( m_api.optixProgramGroupCreate(m_context, &programGroupDescRaygeneration, 1, &programGroupOptions, nullptr, nullptr, &programGroupRaygeneration ) );
 
   // EXCEPTION
-  std::string ptxException = readPTX("./optix7gui_core/exception.ptx");
+  //std::string ptxException = readPTX("exception.ptx");
+  std::string ptxException = readPTXFromInclude(exception_ptx, sizeof(exception_ptx), "exception.ptx");
 
   OptixModule moduleException;
 
@@ -1936,7 +1957,8 @@ void Application::initPipeline()
   // RADIANCE RAY TYPE
 
   // MISS
-  std::string ptxMiss = readPTX("./optix7gui_core/miss.ptx");
+  //std::string ptxMiss = readPTX("miss.ptx");
+  std::string ptxMiss = readPTXFromInclude(miss_ptx, sizeof(miss_ptx), "miss.ptx");
 
   OptixModule moduleMiss;
 
@@ -1967,8 +1989,10 @@ void Application::initPipeline()
   OPTIX_CHECK( m_api.optixProgramGroupCreate(m_context, &programGroupDescMissRadiance, 1, &programGroupOptions, nullptr, nullptr, &programGroupMissRadiance ) );
 
   // CLOSESTHIT, ANYHIT, INTERSECTION (hit group)
-  std::string ptxClosesthit = readPTX("./optix7gui_core/closesthit.ptx");
-  std::string ptxAnyhit     = readPTX("./optix7gui_core/anyhit.ptx");
+  //std::string ptxClosesthit = readPTX("closesthit.ptx");
+  std::string ptxClosesthit = readPTXFromInclude(closesthit_ptx, sizeof(closesthit_ptx), "closesthit.ptx");
+  //std::string ptxAnyhit     = readPTX("anyhit.ptx");
+  std::string ptxAnyhit     = readPTXFromInclude(anyhit_ptx, sizeof(anyhit_ptx), "anyhit.ptx");
 
   OptixModule moduleClosesthit;
   OptixModule moduleAnyhit;
@@ -2038,11 +2062,16 @@ void Application::initPipeline()
 
   // DIRECT CALLABLES
 
-  std::string ptxLensShader                     = readPTX("./optix7gui_core/lens_shader.ptx");
-  std::string ptxLightSample                    = readPTX("./optix7gui_core/light_sample.ptx");
-  std::string ptxDiffuseReflection              = readPTX("./optix7gui_core/bsdf_diffuse_reflection.ptx");
-  std::string ptxSpecularReflection             = readPTX("./optix7gui_core/bsdf_specular_reflection.ptx");
-  std::string ptxSpecularReflectionTransmission = readPTX("./optix7gui_core/bsdf_specular_reflection_transmission.ptx");
+  // std::string ptxLensShader                     = readPTX("lens_shader.ptx");
+  // std::string ptxLightSample                    = readPTX("light_sample.ptx");
+  // std::string ptxDiffuseReflection              = readPTX("bsdf_diffuse_reflection.ptx");
+  // std::string ptxSpecularReflection             = readPTX("bsdf_specular_reflection.ptx");
+  // std::string ptxSpecularReflectionTransmission = readPTX("bsdf_specular_reflection_transmission.ptx");
+  std::string ptxLensShader                     = readPTXFromInclude(lens_shader_ptx, sizeof(lens_shader_ptx), "lens_shader.ptx");
+  std::string ptxLightSample                    = readPTXFromInclude(light_sample_ptx, sizeof(light_sample_ptx), "light_sample.ptx");
+  std::string ptxDiffuseReflection              = readPTXFromInclude(bsdf_diffuse_reflection_ptx, sizeof(bsdf_diffuse_reflection_ptx), "bsdf_diffuse_reflection.ptx");
+  std::string ptxSpecularReflection             = readPTXFromInclude(bsdf_specular_reflection_ptx, sizeof(bsdf_specular_reflection_ptx), "bsdf_specular_reflection.ptx");
+  std::string ptxSpecularReflectionTransmission = readPTXFromInclude(bsdf_specular_reflection_transmission_ptx, sizeof(bsdf_specular_reflection_transmission_ptx), "bsdf_specular_reflection_transmission.ptx");
 
   OptixModule moduleLensShader;
   OptixModule moduleLightSample;

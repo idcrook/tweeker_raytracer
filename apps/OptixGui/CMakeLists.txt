@@ -1,7 +1,8 @@
-cmake_minimum_required ( VERSION 3.11 )
+cmake_minimum_required ( VERSION 3.8 )
 
 project ( OptixGui VERSION 0.1.0  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
+message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
 
 # set to match your path
 set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
@@ -9,20 +10,12 @@ set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
 # can override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 
 
-# needed for conan link_directories  imgui::imgui, etc.
-set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/build")
-
 # As of CMake 2.6 policies were introduced in order to provide a mechanism for
-cmake_policy(VERSION 3.11)
+cmake_policy(VERSION 3.8)
 
 if( POLICY CMP0072 )
   # FindOpenGL prefers GLVND by default when available
   cmake_policy(SET CMP0072 NEW)
-endif()
-
-if( POLICY CMP0074 )
-  # find_package uses <PackageName>_ROOT variables.
-  cmake_policy(SET CMP0074 NEW)
 endif()
 
 set(CMAKE_MODULE_PATH
@@ -30,9 +23,6 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/../CMake"
   ${CMAKE_MODULE_PATH}
   )
-
-# message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
-# message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
 # Set to c++11
 set ( CMAKE_CXX_STANDARD 11 )
@@ -46,7 +36,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
-  #find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
+  find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
 
   # Defines OptiX utilities and variables
   INCLUDE(configure_optix)
@@ -54,26 +44,91 @@ else()
   message(STATUS "No CUDA support")
 endif()
 
-# related to conan
-# CONFIG option is important so CMake does not search for modules into the default modules directory
-find_package(imgui CONFIG)
-find_package(glfw CONFIG)
-find_package(glew CONFIG)
+
+##################################################################
+# conan config and install dependencies
+#
+
+set(CONAN_CMAKE_SILENT_OUTPUT "ON")
+
+# Download automatically, you can also just copy the conan.cmake file
+if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+   message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+   file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/master/conan.cmake"
+                  "${CMAKE_BINARY_DIR}/conan.cmake")
+endif()
+
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+
+# remote needed to workaround for busted main repo libx11 dependency from glfw
+##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
+##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
+
+conan_add_remote(
+  NAME bincrafters
+  URL https://api.bintray.com/conan/bincrafters/public-conan
+  )
+
+# BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
+# mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
+
+conan_cmake_run(
+  CONANFILE conanfile.txt
+  BASIC_SETUP
+  BUILD missing
+  )
+
+
+# needed for local conan link_directories  imgui::imgui, etc.
+set(CMAKE_PREFIX_PATH
+  # "${CMAKE_CURRENT_SOURCE_DIR}/build"
+  "${CMAKE_CURRENT_BINARY_DIR}"  # works when called locally or from top-level
+  ${CMAKE_PREFIX_PATH}
+  )
+
+#message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+#message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
+#message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+
+
+# find_package will search CONFIG before MODULE with this turned ON
+#set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+
+# debug include_directories
+
+# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+# foreach(dir ${dirs})
+#   message(STATUS "dir='${dir}'")
+# endforeach()
+
+
+# These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
+find_package(imgui CONFIG REQUIRED)
+find_package(glfw  CONFIG REQUIRED)
+find_package(glew  CONFIG REQUIRED)
 
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
 
-# image loading
+# image loading - expect system developer package to be installed
 find_package(DevIL REQUIRED)
+
 
 if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
   include_directories( ${OPENGL_INCLUDE_DIR} )
 endif()
 
+# message("OPENGL_FOUND          = " " ${OPENGL_FOUND}")
+# message("OPENGL_INCLUDE_DIR    = " " ${OPENGL_INCLUDE_DIR}")
+# message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+# message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+# message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
+
 # for local source includes and devil
 INCLUDE_DIRECTORIES(
   "."
   ${IL_INCLUDE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/build
   )
 
 # # Tells CMake to build all the libraries as shared libraries by default.  This can be
@@ -127,9 +182,21 @@ endif()
 
 ##################################################################
 # SUtil compilation
+#
+# - needs OptiX to be found before here
+#
+# - removed glew.h symbols deleted on transition from GLEW 2.0 -> 2.1
+#
+# - move after conan, so uses GLEW headers from 2.1 dependency
+#
+
+message("OptiX_INCLUDE    = " "${OptiX_INCLUDE}")
 
 set(SAMPLES_PTX_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 set(SAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+message("SAMPLES_PTX_DIR    = " "${SAMPLES_PTX_DIR}")
+message("SAMPLES_DIR        = " "${SAMPLES_DIR}")
 
 set(CUDA_GENERATED_OUTPUT_DIR ${SAMPLES_PTX_DIR})
 
@@ -152,6 +219,7 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/sutil
 
 
 set(SAMPLES_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/device_include)
+
 
 #########################################################
 # OPTIX_add_sample_executable
@@ -190,7 +258,8 @@ function(OPTIX_add_sample_executable target_name)
   # rule that specifies this linkage.
   target_link_libraries(  ${target_name}
     sutil_sdk
-    OpenGL::GL
+    # OpenGL::GL
+    OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
     imgui::imgui
     glew::glew
     glfw::glfw
@@ -201,7 +270,7 @@ function(OPTIX_add_sample_executable target_name)
     )
 
   message("optix_LIBRARY =      " "${optix_LIBRARY}")
-  #message("OPENGL_gl_LIBRARY    = " OpenGL::GL)
+  message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
 
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)

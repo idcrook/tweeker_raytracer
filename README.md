@@ -50,7 +50,7 @@ Apps
 `optixGui`
 ----------
 
--	[OptixGui](src/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
+-	[OptixGui](apps/OptixGui) - based directly on https://github.com/nvpro-samples/optix_advanced_samples/tree/master/src/optixIntroduction
 
 OptiX 6.5 imgui
 
@@ -59,12 +59,12 @@ OptiX 6.5 imgui
 -	Uses DevIL image library
 -	Assumes [optix_advanced_samples](https://github.com/nvpro-samples/optix_advanced_samples) repo is available for its texture files
 
-See respective [README.md](src/OptixGui/README.md) for build instructions and `conanfile.txt` for dependencies.
+See respective [README.md](apps/OptixGui/README.md) for build instructions and `conanfile.txt` for dependencies.
 
 `optix7Gui`
 -----------
 
--	[Optix7Gui](src/Optix7Gui) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/intro_denoiser
+-	[Optix7Gui](apps/Optix7Gui) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/intro_denoiser
 
 OptiX 7 imgui
 
@@ -73,15 +73,29 @@ OptiX 7 imgui
 -	Uses DevIL image library
 -	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for its texture files
 
-See respective [README.md](src/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
+See respective [README.md](apps/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
 
-Build
------
+Build on Linux
+--------------
 
-Refer to
+Refer to respective readme for pointing to texture files.
 
--	[OptixGui README](src/OptixGui/README.md)
--	[Optix7Gui README](src/Optix7Gui/README.md)
+-	[OptixGui README](apps/OptixGui/README.md)
+-	[Optix7Gui README](apps/Optix7Gui/README.md)
+
+```bash
+# navigate to top-level of this repo
+cd tweeker_raytracer
+
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
+OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+cmake \
+    -D CMAKE_BUILD_TYPE=Release \
+    -B build apps
+
+cmake --build build --parallel 7
+
+```
 
 ### Run
 
@@ -89,8 +103,20 @@ After a successful build
 
 ```shell
 cd tweeker_raytracer # top-level directory again
-# run
-build/optixGui [options]
+
+build/OptixGui/bin/optixGui -h
+build/Optix7Gui/bin/optix7Gui -h
+
+# optixGui - FIXME: update path handling
+OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
+    build/OptixGui/bin/optixGui
+
+
+# optix7Gui - FIXME: top-level build cannot locate texture images
+build/Optix7Gui/bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
+
+
 ```
 
 Image renders and screencaps from `optixGui`
