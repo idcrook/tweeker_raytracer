@@ -47,7 +47,7 @@ cmake --build . --target optixGui --parallel 7
 bin/optixGui
 ```
 
-Once you've gathered the dependencies using conan, you can also switch to running CMake at the top-level. so starting above example at the CMake generate step
+conan also works to download from top-level
 
 ```shell
 # navigate to repo clone toplevel
@@ -70,6 +70,8 @@ OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
 ```
 
 change `-DCMAKE_BUILD_TYPE=Release` to `-DCMAKE_BUILD_TYPE=Debug` in the above commands to get debug versions of dependencies, etc.
+
+<!-- Once you've gathered the dependencies using conan, you can also switch to running CMake at the top-level. so starting above example at the CMake generate step -->
 
 <!-- ### Debug build -->
 

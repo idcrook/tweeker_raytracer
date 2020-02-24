@@ -1556,9 +1556,12 @@ OptixTraversableHandle Application::createGeometry(std::vector<VertexAttributes>
 
 std::string Application::readPTX(std::string const& base_filename)
 {
-
-  // FIXME: hard-coded
-  const std::string pathPrefix = "./bin/optix7gui_core/";
+  // FIXME: fragile, coupled hardcoded path
+  std::string pathPrefix = "./bin/optix7gui_core/";
+  std::string loadPtxDir = getenv("OPTIX7_LOCAL_PTX_DIR");
+  if (!loadPtxDir.empty()) {
+    pathPrefix = loadPtxDir + "/";
+  }
   std::string filename =  pathPrefix + base_filename;
 
   std::ifstream inputPtx(filename);
