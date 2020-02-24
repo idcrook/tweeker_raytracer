@@ -93,8 +93,17 @@ cmake \
     -D CMAKE_BUILD_TYPE=Release \
     -B build apps
 
+# do bindings workaround described below, and run above command again
+
 cmake --build build --parallel 7
 
+```
+
+Workaround for conan imgui bindings not being found
+
+```
+cp -r build/bindings apps/OptixGui
+cp -r build/bindings apps/Optix7Gui
 ```
 
 ### Run

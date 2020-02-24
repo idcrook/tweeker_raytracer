@@ -94,13 +94,6 @@ set(CMAKE_PREFIX_PATH
 # find_package will search CONFIG before MODULE with this turned ON
 #set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
 
-# debug include_directories
-
-# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
-# foreach(dir ${dirs})
-#   message(STATUS "dir='${dir}'")
-# endforeach()
-
 
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
 find_package(imgui CONFIG REQUIRED)
@@ -129,7 +122,16 @@ INCLUDE_DIRECTORIES(
   "."
   ${IL_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/build
+  #${CMAKE_CURRENT_BINARY_DIR}/../bindings/.. # FIXME: needed for bindings/ at top-level
   )
+
+# # debug include_directories
+
+# get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
+# foreach(dir ${dirs})
+#   message(STATUS "dir='${dir}'")
+# endforeach()
+
 
 # # Tells CMake to build all the libraries as shared libraries by default.  This can be
 # # overrided by individual libraries later.
@@ -346,6 +348,7 @@ OPTIX_add_sample_executable( optixGui
   shaders/bsdf_specular_reflection_transmission.cu
   shaders/light_sample.cu
 
+  # may not be available when built from top-level
   bindings/imgui_impl_glfw.h
   bindings/imgui_impl_glfw.cpp
   bindings/imgui_impl_opengl3.h

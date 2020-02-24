@@ -328,10 +328,12 @@ target_compile_definitions(optix7Gui PRIVATE "_CRT_SECURE_NO_WARNINGS")
 target_include_directories(optix7Gui PUBLIC
   "."
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+  #$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../bindings/..> # FIXME: needed for bindings/ at top-level
   # $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
 )
 target_include_directories(optix7Gui PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR}/include
+  #${CMAKE_CURRENT_BINARY_DIR}/../bindings/.. # FIXME: needed for bindings/ at top-level
   ${CUDA_TOOLKIT_INCLUDE}
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
   ${OPTIX7_INCLUDE_DIR}
