@@ -78,7 +78,7 @@ See respective [README.md](apps/Optix7Gui/README.md) for build instructions and 
 Build on Linux
 --------------
 
-Refer to respective readme for pointing to texture files.
+IMPORTANT: Refer to respective readme for pointing to texture files.
 
 -	[OptixGui README](apps/OptixGui/README.md)
 -	[Optix7Gui README](apps/Optix7Gui/README.md)
@@ -93,17 +93,7 @@ cmake \
     -D CMAKE_BUILD_TYPE=Release \
     -B build apps
 
-# do bindings workaround described below, and run above command again
-
 cmake --build build --parallel 7
-
-```
-
-Workaround for conan imgui bindings not being found
-
-```
-cp -r build/bindings apps/OptixGui
-cp -r build/bindings apps/Optix7Gui
 ```
 
 ### Run
@@ -120,12 +110,9 @@ build/Optix7Gui/bin/optix7Gui -h
 OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
     build/OptixGui/bin/optixGui
 
-
 # optix7Gui - FIXME: top-level build cannot locate texture images
 build/Optix7Gui/bin/optix7Gui || \
   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
-
-
 ```
 
 Image renders and screencaps from `optixGui`

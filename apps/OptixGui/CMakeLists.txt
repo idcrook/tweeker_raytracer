@@ -81,6 +81,29 @@ conan_cmake_run(
   BUILD missing
   )
 
+# these are "imports" in conanfile.txt
+set(IMGUI_BINDINGS
+  bindings/imgui_impl_glfw.h
+  bindings/imgui_impl_glfw.cpp
+  bindings/imgui_impl_opengl3.h
+  bindings/imgui_impl_opengl3.cpp
+  )
+
+# copy the conan outputs (headers and source for imgui bindings)
+message(STATUS "Copying imgui bindings")
+FOREACH(input ${IMGUI_BINDINGS})
+  # the DEST_PATH is relative to the CURRENT_SOURCE_DIR when expanded
+  get_filename_component(DEST_PATH "${input}" ABSOLUTE)
+
+  # the CONAN_RESULT is relative to the current binary directory
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESULT "${DEST_PATH}")
+  # message("\nPATH_CONAN_RESULT    = " " ${PATH_CONAN_RESULT}")
+  # message("DEST_PATH            = " " ${DEST_PATH}")
+
+  # configure_file respects Makefile timestamp dynamics
+  configure_file(${PATH_CONAN_RESULT} ${DEST_PATH} COPYONLY)
+
+ENDFOREACH( )
 
 # needed for local conan link_directories  imgui::imgui, etc.
 set(CMAKE_PREFIX_PATH
@@ -95,29 +118,6 @@ set(CMAKE_PREFIX_PATH
 
 # find_package will search CONFIG before MODULE with this turned ON
 #set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
-
-
-set(IMGUI_BINDINGS
-  bindings/imgui_impl_glfw.h
-  bindings/imgui_impl_glfw.cpp
-  bindings/imgui_impl_opengl3.h
-  bindings/imgui_impl_opengl3.cpp
-  )
-
-# copy the conan resolut to out source directory
-FOREACH(input ${IMGUI_BINDINGS})
-  get_filename_component(DEST_PATH "${input}" ABSOLUTE)
-
-  # the CONAN_RESULT is relative to the current binary directory
-  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESULT "${DEST_PATH}")
-  message("\nPATH_CONAN_RESULT    = " " ${PATH_CONAN_RESULT}")
-  message("DEST_PATH            = " " ${DEST_PATH}")
-
-  # configure_file respects Makefile timestamp dynamics
-  configure_file(${PATH_CONAN_RESULT} ${DEST_PATH} COPYONLY)
-
-ENDFOREACH( )
-
 
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
 find_package(imgui CONFIG REQUIRED)

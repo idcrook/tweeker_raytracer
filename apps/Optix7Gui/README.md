@@ -38,20 +38,27 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B . ..
 
+cmake --build build --target optix7Gui --parallel 7
+
+./bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
+
+```
+
+Top-level build
+
+```
+# navigate to top-level
+
+cd tweeker_raytracer
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B build apps
 
 cmake --build build --target optix7Gui --parallel 7
 
-./bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
-
-OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
 build/Optix7Gui/bin/optix7Gui || \
-  OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
-
 
 ```
 
@@ -69,8 +76,6 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -B . ..
 
 cmake --build . --target optix7Gui --parallel 7
-
-# LD_LIBRARY_PATH needed so that system Nvidia opengl drivers are used
 
 ./bin/optix7Gui || \
   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui

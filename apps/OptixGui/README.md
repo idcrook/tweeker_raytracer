@@ -35,7 +35,6 @@ cd apps/OptixGui
 mkdir build
 cd build
 
-# if you are only interested in this app from the repo
 cmake \
     -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
@@ -66,42 +65,11 @@ cmake --build build --target optixGui --parallel 7
 # FIXME: update path handling
 OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
     build/OptixGui/bin/optixGui
-
 ```
 
 change `-DCMAKE_BUILD_TYPE=Release` to `-DCMAKE_BUILD_TYPE=Debug` in the above commands to get debug versions of dependencies, etc.
 
-<!-- Once you've gathered the dependencies using conan, you can also switch to running CMake at the top-level. so starting above example at the CMake generate step -->
-
-<!-- ### Debug build -->
-
-<!-- ``` -->
-
-<!-- # in case you have not run it yet -->
-
-<!-- conan install .. -s build_type=Debug -->
-
-<!-- # run generate -->
-
-<!-- # if you are only interested in this app from the repo -->
-
-<!-- cmake \ -->
-
-<!--     -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \ -->
-
-<!--     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \ -->
-
-<!--     -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \ -->
-
-<!--     -B . .. -->
-
-<!-- cmake --build . --target optixGui --parallel 7 -->
-
-<!-- ./optixGui -->
-
-<!-- ``` -->
-
-setting up in cuda-gdb
+### setting up in cuda-gdb
 
 ```shell
 cd /home/dpc/projects/learning/rt/tweeker_feature/apps/OptixGui/build
