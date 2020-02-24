@@ -78,7 +78,7 @@ See respective [README.md](apps/Optix7Gui/README.md) for build instructions and 
 Build on Linux
 --------------
 
-Refer to repsective readme for pointing to texture files.
+Refer to respective readme for pointing to texture files.
 
 -	[OptixGui README](apps/OptixGui/README.md)
 -	[Optix7Gui README](apps/Optix7Gui/README.md)
@@ -90,21 +90,10 @@ cd tweeker_raytracer
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
 OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 cmake \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
+    -D CMAKE_BUILD_TYPE=Release \
     -B build apps
 
 cmake --build build --parallel 7
-
-# optixGui - FIXME: update path handling
-OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
-    build/OptixGui/bin/optixGui
-
-
-# optix7Gui - does not build simultaneously at top-level currently due to using different CMake CUDA methodologies
-OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
-build/Optix7Gui/bin/optix7Gui || \
-  OPTIX7_LOCAL_PTX_DIR=`pwd`/build/Optix7Gui/bin/optix7gui_core \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
 
 ```
 
@@ -114,8 +103,20 @@ After a successful build
 
 ```shell
 cd tweeker_raytracer # top-level directory again
-# run
-build/optixGui [options]
+
+build/OptixGui/bin/optixGui -h
+build/Optix7Gui/bin/optix7Gui -h
+
+# optixGui - FIXME: update path handling
+OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
+    build/OptixGui/bin/optixGui
+
+
+# optix7Gui - FIXME: top-level build cannot locate texture images
+build/Optix7Gui/bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
+
+
 ```
 
 Image renders and screencaps from `optixGui`

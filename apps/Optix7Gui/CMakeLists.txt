@@ -39,12 +39,6 @@ if( POLICY CMP0072 )
   cmake_policy(SET CMP0072 NEW)
 endif()
 
-# needed for local conan link_directories  imgui::imgui, etc.
-set(CMAKE_PREFIX_PATH
-  # "${CMAKE_CURRENT_SOURCE_DIR}/build"
-  "${CMAKE_CURRENT_BINARY_DIR}"  # works when called locally or from top-level
-  ${CMAKE_PREFIX_PATH}
-  )
 
 set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/../CMake"
@@ -54,10 +48,10 @@ set(CMAKE_MODULE_PATH
 message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
 message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
-# Use the NVCUDA_COMPILE_PTX function to produce the desired custom rule and output filenames when compiling OptiX programs from *.cu to *.ptx.
-#include("nvcuda_compile_ptx")
-
-# set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+# Do not use add_definitions without seperating out languages, e.g. <COMPILE_LANGUAGE:CXX>
+#  target_compile_options( myptx PRIVATE
+#    $<$<COMPILE_LANGUAGE:CUDA>:${local_cuda_flags}>
+#    # $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>
 
 # if(UNIX)
 #   set(OS "linux")
@@ -75,8 +69,7 @@ message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 # endif(UNIX)
 
 # Set to c++14
-##set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Currently this project uses the deprecated CUDA find_package
@@ -88,13 +81,16 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD 11)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
-  #find_package(CUDA 10.0 REQUIRED)
+  # requires cmake 3.17 - FindCUDAToolkit()
+  find_package(CUDA 10.0 REQUIRED)  # Still required even with CUDA language
+                                    # support so we can link against CUDA from
+                                    # a cpp-only target
 
   # If you want to use separable compilation you will need to use
   # CMAKE_CUDA_FLAGS as target_compile_options aren’t propagated when doing
   # device linking
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
-  # cmake 3.17 - FindCUDAToolkit()
+
   INCLUDE(configure_optix7)
 else()
   message(STATUS "No CUDA support")
@@ -105,13 +101,15 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
+# note: no longer use this since PTX include file now built into executable
 set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 #set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
-
-message("PTX_TARGET_DIR  = " "${PTX_TARGET_DIR}")
+#message("PTX_TARGET_DIR  = " "${PTX_TARGET_DIR}")
 
 ##################################################################
 # conan config and install dependencies
+#
+# - requires conan to be installed before generating with CMake
 #
 
 # Download automatically, you can also just copy the conan.cmake file
@@ -134,6 +132,7 @@ conan_add_remote(
 
 # BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
 # mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
+set(CONAN_CMAKE_SILENT_OUTPUT "ON")
 
 conan_cmake_run(
   CONANFILE conanfile.txt
@@ -157,16 +156,52 @@ find_package(glew   CONFIG REQUIRED)
 #find_package(assimp CONFIG REQUIRED)
 
 
+#find_package(OptiX7 REQUIRED)    # Located above
+#find_package(CUDA 10.0 REQUIRED) # Located above
 find_package(OpenGL REQUIRED)
-#find_package(OptiX7 REQUIRED)
-#find_package(CUDA 10.0 REQUIRED)
 #find_package(DevIL_1_8_0 REQUIRED)
 #find_package(DevIL_1_7_8 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is system package on ubuntu
 
-# if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
-#   include_directories( ${OPENGL_INCLUDE_DIR} )
-# endif()
+if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
+  include_directories( ${OPENGL_INCLUDE_DIR} )
+endif()
+
+# Usage report verbosity - Currently unimplemented
+set(OPTIX7GUI_USAGE_REPORT_VERBOSITY "0" CACHE STRING "Verbosity of OptiX usage report (0 disables reporting).")
+set_property(CACHE OPTIX7GUI_USAGE_REPORT_VERBOSITY PROPERTY STRINGS 0 1 2 3)
+
+option(OPTIX7GUI_USE_DEBUG_EXCEPTIONS "Enables advanced exception handling and error checking for debugging purposes." OFF)
+
+# NOTE below, without "--relocatable-device-code=true" flag, will receive warning:
+# /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/shaders/miss.cu(38): warning: extern declaration of the entity sysParameter is treated as a static definition
+
+# Flags to compile kernels to PTX
+if (OPTIX7GUI_USE_DEBUG_EXCEPTIONS)
+  set(local_cuda_flags
+    #"--machine=64"
+    "--gpu-architecture=compute_30"
+    "--relocatable-device-code=true"
+    "--use_fast_math"
+    "--keep-device-functions"
+    "--generate-line-info"
+    "--verbose"
+    )
+else()
+  set(local_cuda_flags
+    #"--machine=64"
+    #"-arch=sm_30"
+    "--gpu-architecture=compute_30"
+    "--relocatable-device-code=true"
+    "--use_fast_math"
+    "--keep-device-functions"
+    "--generate-line-info"
+    )
+endif()
+
+string(REPLACE ";" " " CMAKE_CUDA_FLAGS "${local_cuda_flags}" )
+message("CMAKE_CUDA_FLAGS    = " "${CMAKE_CUDA_FLAGS}")
+
 
 
 set( IMGUI
@@ -204,7 +239,7 @@ set( SOURCES
 )
 
 # Prefix the shaders with the full path name to allow stepping through errors with F8.
-set( SHADERS
+set( CUDA_SHADERS
   # Core shaders.
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/anyhit.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/closesthit.cu
@@ -220,7 +255,7 @@ set( SHADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bsdf_specular_reflection_transmission.cu
 )
 
-set( SHADERS_HEADERS
+set( CUDA_SHADERS_HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/app_config.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/function_indices.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/half_common.h
@@ -235,154 +270,74 @@ set( SHADERS_HEADERS
 )
 
 
-# # DAR FIXME OptiX 6.0.0 and up do not support Kepler GPUs anymore. Generate code for the lowest Maxwell SM 5.0 instead.
-# NVCUDA_COMPILE_PTX( SOURCES ${SHADERS}
-#                     DEPENDENCIES ${SHADERS_HEADERS}
-#                     TARGET_PATH "${PTX_TARGET_DIR}/optix7gui_core"
-#                     GENERATED_FILES PTX_SOURCES
-#                     NVCC_OPTIONS "--gpu-architecture=compute_30" "--use_fast_math" "--relocatable-device-code=true" "--generate-line-info" "-I${OPTIX7_INCLUDE_DIR}" "-I${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-#                   )
+add_library(shadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS})
+set_property(TARGET shadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
+target_include_directories(shadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
+# target_include_directories(shadersPTX PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+target_include_directories(shadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 
-source_group( "imgui"           FILES ${IMGUI} )
-source_group( "headers"         FILES ${HEADERS} )
-source_group( "sources"         FILES ${SOURCES} )
-source_group( "shaders"         FILES ${SHADERS} )
-source_group( "shaders_headers" FILES ${SHADERS_HEADERS} )
-source_group( "ptx"             FILES ${PTX_SOURCES})
 
-#message("GLEW_INCLUDE_DIRS    = " "${GLEW_INCLUDE_DIRS}")
-#message("GLFW_INCLUDE_DIR     = " "${GLFW_INCLUDE_DIR}")
-message("CUDA_TOOLKIT_INCLUDE = " "${CUDA_TOOLKIT_INCLUDE}")
-#message("IL_INCLUDE_DIR       = " "${IL_INCLUDE_DIR}")
+# Retrieve bin2c util
+get_filename_component(cuda_compiler_bin "${CMAKE_CUDA_COMPILER}" DIRECTORY)
+find_program(bin_to_c
+    NAMES bin2c
+    PATHS ${cuda_compiler_bin}
+    )
+if(NOT bin_to_c)
+    message(FATAL_ERROR
+        "bin2c not found:\n"
+        "  CMAKE_CUDA_COMPILER='${CMAKE_CUDA_COMPILER}'\n"
+        "  cuda_compiler_bin='${cuda_compiler_bin}'\n"
+    )
+endif()
 
-##################################################################
-# CUDA config
-
-# # Present the CUDA_64_BIT_DEVICE_CODE on the default set of options.
-# mark_as_advanced(CLEAR CUDA_64_BIT_DEVICE_CODE)
-
-# # Add some useful default arguments to the nvcc flags.  This is an example of how we use
-# # PASSED_FIRST_CONFIGURE.  Once you have configured, this variable is TRUE and following
-# # block of code will not be executed leaving you free to edit the values as much as you
-# # wish from the GUI or from ccmake.
-# if(NOT PASSED_FIRST_CONFIGURE)
-
-#   # list(APPEND default_nvcc_flags
-#   #   "--machine=64" "--use_fast_math" "--gpu-architecture=compute_30"  "--relocatable-device-code=true" "--verbose"
-#   #   "--generate-line-info" "-I${OPTIX7_INCLUDE_DIR}" "-I${CMAKE_CURRENT_SOURCE_DIR}/shaders" )
-
-#   if (CUDA_VERSION VERSION_LESS "3.0")
-#     list(APPEND default_nvcc_flags "--keep")
-#   endif()
-
-#   if( APPLE )
-#     # Undef'ing __BLOCKS__ for OSX builds.  This is due to a name clash between OSX 10.6
-#     # C headers and CUDA headers
-#     list(APPEND default_nvcc_flags "-U__BLOCKS__")
-#   endif()
-
-#   # Append to nvcc flags
-#   foreach(flag IN LISTS default_nvcc_flags)
-#     list(FIND CUDA_NVCC_FLAGS ${flag} index)
-#     if(index EQUAL -1)
-#       list(APPEND CUDA_NVCC_FLAGS ${flag})
-#       set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} CACHE LIST "Semi-colon delimit multiple arguments." FORCE)
-#     endif()
-#   endforeach(flag)
-
-# endif(NOT PASSED_FIRST_CONFIGURE)
-
-# # Add required nvcc flag for callable programs under CUDA 8
-# if (CUDA_VERSION VERSION_GREATER "7.5")
-#   set(flag "--keep-device-functions")
-#   list(FIND CUDA_NVCC_FLAGS ${flag} index)
-#   if(index EQUAL -1)
-#     list(APPEND CUDA_NVCC_FLAGS ${flag})
-#     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} CACHE LIST "Semi-colon delimit multiple arguments." FORCE)
-#   endif()
-# endif()
-
-message("CUDA_NVCC_FLAGS     = " " ${CUDA_NVCC_FLAGS}")
-
-include_directories(
-  "."
-  # "inc"
-  ${OPTIX7_INCLUDE_DIR}
-  ${CUDA_TOOLKIT_INCLUDE}
-  ${IL_INCLUDE_DIR}
+# Embed PTX in header file that will be built into program
+set(headerPathPTX ${CMAKE_CURRENT_BINARY_DIR}/include/PTX.h)
+add_custom_command(
+    OUTPUT "${headerPathPTX}"
+    COMMAND ${CMAKE_COMMAND}
+    "-DBIN_TO_C_COMMAND=${bin_to_c}"
+    "-DOBJECTS=$<TARGET_OBJECTS:shadersPTX>"
+    "-DOUTPUT=${headerPathPTX}"
+    -P ${PROJECT_SOURCE_DIR}/../CMake/bin2c_wrapper.cmake
+    VERBATIM
+    DEPENDS $<TARGET_OBJECTS:shadersPTX>
+    COMMENT "Converting PTX files to a C header" "${headerPathPTX}"
 )
-
-message("CUDA_TOOLKIT_INCLUDE  = " "${CUDA_TOOLKIT_INCLUDE}")
-
-add_definitions(
-  # Disable warnings for file operations fopen etc.
-  "-D_CRT_SECURE_NO_WARNINGS"
-)
-
 
 
 add_executable( optix7Gui
-  )
-
-target_sources( optix7Gui PRIVATE
   ${IMGUI}
   ${HEADERS}
   ${SOURCES}
-  ${SHADERS_HEADERS}
-  #${SHADERS}
-  ${PTX_SOURCES}
+  ${headerPathPTX}
   )
 
+add_dependencies(optix7Gui shadersPTX)
 
-add_library(myptx OBJECT )
-target_sources(myptx PRIVATE ${SHADERS})
-set_property(TARGET myptx PROPERTY CUDA_PTX_COMPILATION ON)
+message("CUDA_TOOLKIT_INCLUDE  = " "${CUDA_TOOLKIT_INCLUDE}")
+#message("CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES  = " "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
 
-#target_link_libraries(myptx PUBLIC gtc_compiler_flags)
-target_link_libraries(myptx PUBLIC )
-target_include_directories(myptx
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${OPTIX7_INCLUDE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-  # INTERFACE$<INSTALL_INTERFACE:include/gtc>
-  )
-
-
-#set_property(TARGET optix7Gui PROPERTY CUDA_PTX_COMPILATION ON)
-
-#message("OPENGL_gl_LIBRARY = " "${OPENGL_gl_LIBRARY}")
-#message("GLEW_LIBRARIES    = " "${GLEW_LIBRARIES}")
-#message("GLFW_LIBRARIES    = " "${GLFW_LIBRARIES}")
-#message("CUDA_CUDA_LIBRARY = " "${CUDA_CUDA_LIBRARY}")
-#message("IL_LIBRARIES      = " "${IL_LIBRARIES}")
-#message("ILU_LIBRARIES     = " "${ILU_LIBRARIES}")
-#message("ILUT_LIBRARIES    = " "${ILUT_LIBRARIES}")
+# add_definitions(
+#   # Disable warnings for file operations fopen etc.
+#   "-D_CRT_SECURE_NO_WARNINGS"
+# )
+target_compile_definitions(optix7Gui PRIVATE "_CRT_SECURE_NO_WARNINGS")
 
 
-#"--gpu-architecture=compute_30"  "--relocatable-device-code=true" "--verbose"
-#   "--generate-line-info"
+target_include_directories(optix7Gui PUBLIC
+  "."
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+  # $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
+)
+target_include_directories(optix7Gui PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}/include
+  ${CUDA_TOOLKIT_INCLUDE}
+  ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+  ${OPTIX7_INCLUDE_DIR}
+  ${IL_INCLUDE_DIR}
+)
 
-set(local_cuda_flags
-  "--machine=64"
-  # "-D__x86_64"
-  "--gpu-architecture=compute_30"
-  "--relocatable-device-code=true"
-  "--keep-device-functions"
-  "--generate-line-info"
-  "--use_fast_math"
-  "-I${CUDA_TOOLKIT_INCLUDE}"
-  "-I${OPTIX7_INCLUDE_DIR}"
-  "-I${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-  )
-
-#target_compile_options( optix7Gui PRIVATE
-target_compile_options( myptx PRIVATE
-  $<$<COMPILE_LANGUAGE:CUDA>:${local_cuda_flags}>
-  # $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>
-  # $<$<COMPILE_LANGUAGE:CUDA>:--gpu-architecture=compute_30>
-  # $<$<COMPILE_LANGUAGE:CUDA>:--relocatable-device-code=true>
-  # $<$<COMPILE_LANGUAGE:CUDA>:--generate-line-info>
-  # $<$<COMPILE_LANGUAGE:CUDA>:--keep-device-functions>
-  $<$<COMPILE_LANGUAGE:CUDA>:--verbose>
-  )
 
 target_link_libraries( optix7Gui PUBLIC
   #OpenGL::GL
@@ -391,23 +346,18 @@ target_link_libraries( optix7Gui PUBLIC
   imgui::imgui
   glew::glew
   glfw::glfw
+  ${CUDA_LIBRARIES}
   ${CUDA_CUDA_LIBRARY}
-  #CUDA::toolkit
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
 )
 
-target_link_libraries( optix7Gui  PRIVATE
-  myptx
-)
-
-message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
-message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+# message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+# message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
 message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
+message("CUDA_LIBRARIES        = " " ${CUDA_LIBRARIES}")
 
-# if (UNIX)
-#   target_link_libraries( optix7Gui dl ${CMAKE_DL_LIBS})
-# endif()
-
-# set_target_properties( optix7Gui PROPERTIES FOLDER "apps")
+if (UNIX)
+  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
+endif()

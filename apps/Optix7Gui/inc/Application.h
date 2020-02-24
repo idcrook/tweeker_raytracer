@@ -315,6 +315,7 @@ private:
   void restartAccumulation();
 
   std::string readPTX(std::string const& filename);
+  std::string readPTXFromInclude(unsigned char* ptx, size_t ptxBytes, const std::string& dummyFilename);
 
   void updateShaderBindingTable(const int instance);
 
