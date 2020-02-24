@@ -28,6 +28,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 # SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 
-ADD_SUBDIRECTORY( OptixGui )
+#ADD_SUBDIRECTORY( OptixGui )
 
-#ADD_SUBDIRECTORY( Optix7Gui )  # Uses deprecated CUDA find_package()
+ADD_SUBDIRECTORY( Optix7Gui )  # Uses deprecated CUDA find_package()

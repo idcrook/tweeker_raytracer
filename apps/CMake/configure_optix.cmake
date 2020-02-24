@@ -20,7 +20,9 @@
 # message(STATUS "CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH}")
 # message(STATUS "CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH}")
 
-find_package(CUDA 5.0 REQUIRED)
+if (NOT DEFINED CUDA_FOUND)
+  find_package(CUDA 5.0 REQUIRED)
+endif()
 find_package(OptiX REQUIRED)
 
 #include_directories(${CUDA_TOOLKIT_INCLUDE})

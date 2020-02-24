@@ -1,5 +1,4 @@
-cmake_minimum_required ( VERSION 3.11 )
-
+cmake_minimum_required ( VERSION 3.8 )
 
 project ( OptixGui VERSION 0.1.0  )
 message("\nPROJECT_NAME = " "${PROJECT_NAME}")
@@ -12,17 +11,12 @@ set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
 
 
 # As of CMake 2.6 policies were introduced in order to provide a mechanism for
-cmake_policy(VERSION 3.11)
+cmake_policy(VERSION 3.8)
 
 if( POLICY CMP0072 )
   # FindOpenGL prefers GLVND by default when available
   cmake_policy(SET CMP0072 NEW)
 endif()
-
-# if( POLICY CMP0074 )
-#   # find_package uses <PackageName>_ROOT variables.
-#   cmake_policy(SET CMP0074 NEW)
-# endif()
 
 set(CMAKE_MODULE_PATH
   #    "${PROJECT_SOURCE_DIR}/CMake"
@@ -42,7 +36,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
-  #find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
+  find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
 
   # Defines OptiX utilities and variables
   INCLUDE(configure_optix)
