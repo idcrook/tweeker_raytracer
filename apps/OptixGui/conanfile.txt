@@ -15,9 +15,7 @@ glew/2.1.0@bincrafters/stable
 cmake_find_package_multi
 
 [imports]
-./res/bindings, imgui_impl_glfw.h -> ../bindings
-./res/bindings, imgui_impl_glfw.cpp -> ../bindings
-./res/bindings, imgui_impl_opengl3.h -> ../bindings
-./res/bindings, imgui_impl_opengl3.cpp -> ../bindings
-# ./res/bindings, imgui_impl_opengl2.h -> ../bindings
-# ./res/bindings, imgui_impl_opengl2.cpp -> ../bindings
+./res/bindings, imgui_impl_glfw.h -> ./bindings
+./res/bindings, imgui_impl_glfw.cpp -> ./bindings
+./res/bindings, imgui_impl_opengl3.h -> ./bindings
+./res/bindings, imgui_impl_opengl3.cpp -> ./bindings

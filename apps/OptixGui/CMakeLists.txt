@@ -44,6 +44,9 @@ else()
   message(STATUS "No CUDA support")
 endif()
 
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 ##################################################################
 # conan config and install dependencies
@@ -90,9 +93,30 @@ set(CMAKE_PREFIX_PATH
 #message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
 #message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
 
-
 # find_package will search CONFIG before MODULE with this turned ON
 #set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
+
+
+set(IMGUI_BINDINGS
+  bindings/imgui_impl_glfw.h
+  bindings/imgui_impl_glfw.cpp
+  bindings/imgui_impl_opengl3.h
+  bindings/imgui_impl_opengl3.cpp
+  )
+
+# copy the conan resolut to out source directory
+FOREACH(input ${IMGUI_BINDINGS})
+  get_filename_component(DEST_PATH "${input}" ABSOLUTE)
+
+  # the CONAN_RESULT is relative to the current binary directory
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESULT "${DEST_PATH}")
+  message("\nPATH_CONAN_RESULT    = " " ${PATH_CONAN_RESULT}")
+  message("DEST_PATH            = " " ${DEST_PATH}")
+
+  # configure_file respects Makefile timestamp dynamics
+  configure_file(${PATH_CONAN_RESULT} ${DEST_PATH} COPYONLY)
+
+ENDFOREACH( )
 
 
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
@@ -348,9 +372,5 @@ OPTIX_add_sample_executable( optixGui
   shaders/bsdf_specular_reflection_transmission.cu
   shaders/light_sample.cu
 
-  # may not be available when built from top-level
-  bindings/imgui_impl_glfw.h
-  bindings/imgui_impl_glfw.cpp
-  bindings/imgui_impl_opengl3.h
-  bindings/imgui_impl_opengl3.cpp
+  ${IMGUI_BINDINGS}
 )
