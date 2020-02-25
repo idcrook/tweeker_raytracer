@@ -37,6 +37,8 @@ cmake_policy(VERSION 3.8)
 if( POLICY CMP0072 )
   # FindOpenGL prefers GLVND by default when available
   cmake_policy(SET CMP0072 NEW)
+  # # the OLD behavior for this policy is to set OpenGL_GL_PREFERENCE to LEGACY
+  # cmake_policy(SET CMP0072 OLD)
 endif()
 
 
@@ -47,26 +49,7 @@ set(CMAKE_MODULE_PATH
 
 message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
 message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
-
-# Do not use add_definitions without seperating out languages, e.g. <COMPILE_LANGUAGE:CXX>
-#  target_compile_options( myptx PRIVATE
-#    $<$<COMPILE_LANGUAGE:CUDA>:${local_cuda_flags}>
-#    # $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math>
-
-# if(UNIX)
-#   set(OS "linux")
-#   add_definitions("-DLINUX")
-#   add_definitions("-Wno-unused-local-typedefs -Wno-delete-non-virtual-dtor")
-#   SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
-# else(UNIX)
-#   if(APPLE)
-#   else(APPLE)
-#     if(WIN32)
-#       set(OS "win")
-#       add_definitions("-DNOMINMAX")
-#     endif(WIN32)
-#   endif(APPLE)
-# endif(UNIX)
+message("CMAKE_BUILD_TYPE     = " "${CMAKE_BUILD_TYPE}")
 
 # Set to c++14
 set(CMAKE_CXX_STANDARD 14)
@@ -93,24 +76,27 @@ if(CMAKE_CUDA_COMPILER)
 
   INCLUDE(configure_optix7)
 else()
-  message(STATUS "No CUDA support")
+  message(FATAL_ERROR "CMake did not find CUDA, which is required to build this program.")
 endif()
-
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-
-# note: no longer use this since PTX include file now built into executable
-set (PTX_TARGET_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
-#set (PTX_TARGET_DIR "${PROJECT_BINARY_DIR}")
-#message("PTX_TARGET_DIR  = " "${PTX_TARGET_DIR}")
 
 ##################################################################
 # conan config and install dependencies
 #
 # - requires conan to be installed before generating with CMake
 #
+
+# With multi generators, conan_cmake_run expects a build_type to be provided
+if(UNIX AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+# WARNING: CMake caches most recent explicit CLI -DCMAKE_BUILD_TYPE for this option
+
+# https://docs.conan.io/en/latest/reference/generators/cmakemulti.html?highlight=message#conan-cmake-silent-output
+set(CONAN_CMAKE_SILENT_OUTPUT ON)
 
 # Download automatically, you can also just copy the conan.cmake file
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
@@ -125,15 +111,15 @@ include(${CMAKE_BINARY_DIR}/conan.cmake)
 ##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
 ##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
 
-conan_add_remote(
-  NAME bincrafters
-  URL https://api.bintray.com/conan/bincrafters/public-conan
-  )
+# conan_add_remote(
+#   NAME bincrafters
+#   URL https://api.bintray.com/conan/bincrafters/public-conan
+#   )
 
 # BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
 # mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
-set(CONAN_CMAKE_SILENT_OUTPUT "ON")
 
+# https://docs.conan.io/en/latest/reference/generators/cmake_find_package_multi.html
 conan_cmake_run(
   CONANFILE conanfile.txt
   BASIC_SETUP
@@ -173,23 +159,22 @@ set(CMAKE_PREFIX_PATH
 # related to conan: CONFIG option is important so CMake does not search for
 # modules into the default modules directory
 find_package(imgui  CONFIG REQUIRED)
-find_package(glfw   CONFIG REQUIRED)
+#find_package(glfw   CONFIG REQUIRED) # switch to using system package instead
 find_package(glew   CONFIG REQUIRED)
-#find_package(assimp CONFIG REQUIRED)
-
 
 #find_package(OptiX7 REQUIRED)    # Located above
 #find_package(CUDA 10.0 REQUIRED) # Located above
-find_package(OpenGL REQUIRED)
+#find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
+find_package(OpenGL REQUIRED )
 #find_package(DevIL_1_8_0 REQUIRED)
 #find_package(DevIL_1_7_8 REQUIRED)
-find_package(DevIL REQUIRED)  # 1.7.8 is system package on ubuntu
+find_package(DevIL REQUIRED)  # 1.7.8 is the system package version on ubuntu
 
-if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
-  include_directories( ${OPENGL_INCLUDE_DIR} )
-endif()
+# if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
+#   include_directories( ${OPENGL_INCLUDE_DIR} )
+# endif()
 
-# Usage report verbosity - Currently unimplemented
+# TBD Usage report verbosity - Currently unimplemented
 set(OPTIX7GUI_USAGE_REPORT_VERBOSITY "0" CACHE STRING "Verbosity of OptiX usage report (0 disables reporting).")
 set_property(CACHE OPTIX7GUI_USAGE_REPORT_VERBOSITY PROPERTY STRINGS 0 1 2 3)
 
@@ -284,12 +269,12 @@ set( CUDA_SHADERS_HEADERS
 )
 
 
-add_library(shadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS})
+# CUDA_SHADERS_HEADERS are colocated in same directory
+add_library(shadersPTX OBJECT ${CUDA_SHADERS})
 set_property(TARGET shadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
 target_include_directories(shadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
-# target_include_directories(shadersPTX PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+# where PTX.h will get placed
 target_include_directories(shadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
-
 
 # Retrieve bin2c util
 get_filename_component(cuda_compiler_bin "${CMAKE_CUDA_COMPILER}" DIRECTORY)
@@ -338,16 +323,17 @@ message("CUDA_TOOLKIT_INCLUDE  = " "${CUDA_TOOLKIT_INCLUDE}")
 # )
 target_compile_definitions(optix7Gui PRIVATE "_CRT_SECURE_NO_WARNINGS")
 
+# are using GLEW opengl loader
+target_compile_definitions(optix7Gui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
+
 
 target_include_directories(optix7Gui PUBLIC
   "."
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  #$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/../bindings/..> # FIXME: needed for bindings/ at top-level
   # $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
 )
 target_include_directories(optix7Gui PRIVATE
   ${CMAKE_CURRENT_BINARY_DIR}/include
-  #${CMAKE_CURRENT_BINARY_DIR}/../bindings/.. # FIXME: needed for bindings/ at top-level
   ${CUDA_TOOLKIT_INCLUDE}
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
   ${OPTIX7_INCLUDE_DIR}
@@ -355,25 +341,37 @@ target_include_directories(optix7Gui PRIVATE
 )
 
 
+if (UNIX)
+  set_target_properties( optix7Gui PROPERTIES
+    #IMPORTED_LINK_INTERFACE_LIBRARIES "${OPENGL_LIBRARIES}"
+    IMPORTED_LINK_INTERFACE_LIBRARIES "${OPENGL_LIBRARIES}"
+    )
+endif()
+
 target_link_libraries( optix7Gui PUBLIC
-  #OpenGL::GL
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
-  OpenGL::GLX    # Projects may use GLVND explicitly with target OpenGL::OpenGL and either OpenGL::GLX
+  OpenGL::GLX    #
+  ${OPENGL_LIBRARIES}
   imgui::imgui
   glew::glew
-  glfw::glfw
-  ${CUDA_LIBRARIES}
-  ${CUDA_CUDA_LIBRARY}
+  #glfw::glfw # switch to using system package instead
+  glfw
+  #${CUDA_LIBRARIES} # runtime libraries
+  ${CUDA_CUDA_LIBRARY} # driver library (for OptiX7)
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
 )
 
-# message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
-# message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
+#
+message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
+message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
+#
+# message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
 message("CUDA_LIBRARIES        = " " ${CUDA_LIBRARIES}")
 
-if (UNIX)
-  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
-endif()
+# if (UNIX)
+#   target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
+# endif()

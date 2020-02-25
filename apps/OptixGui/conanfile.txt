@@ -1,16 +1,10 @@
 [requires]
 imgui/1.75
-glfw/3.3.2@bincrafters/stable
+# glfw/3.3.2@bincrafters/stable # use system dev package instead
+# on ubuntu: sudo apt install libglfw3-dev
 glew/2.1.0@bincrafters/stable
 
-# switched back to glew from glad
-#glad/0.1.33
-# conan search 'glad*'  --remote=conan-center
-# With GLAD, there is an openGL error reported each time the copy of render
-# buffer to openGL window frame: ERROR 1282 in glEnd (only using GLAD)
 
-# find_package(xxxx) in Cmake will need to instead be find_package(xxxx CONFIG)
-# to use the XXXXConfig.cmake files made by package_multi
 [generators]
 cmake_find_package_multi
 

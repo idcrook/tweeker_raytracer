@@ -43,6 +43,9 @@ cmake --build build --target optix7Gui --parallel 7
 ./bin/optix7Gui || \
   LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
 
+LD_PRELOAD=$LD_PRELOAD:/lib/x86_64-linux-gnu/libGL.so \
+   bin/optix7Gui
+
 ```
 
 Top-level build
@@ -53,12 +56,12 @@ Top-level build
 cd tweeker_raytracer
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
-    -B build apps
+    -B build .
 
 cmake --build build --target optix7Gui --parallel 7
 
-build/Optix7Gui/bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
+build/apps/Optix7Gui/bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/apps/Optix7Gui/bin/optix7Gui
 
 ```
 

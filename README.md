@@ -28,6 +28,13 @@ Uses conan as C++ dependency manager. In general this means
 	-	Use cmake to compile/build project sources and libs
 4.	Run
 
+### install dev dependencies
+
+```
+# includes libgl1-mesa-dev as dependency
+sudo apt install libglvnd-dev libglfw3-dev
+```
+
 ### Other Third-party dependencies
 
 In addition to baseline requirements of CUDA SDK and Optix 6.5 and/or Optix 7.0 SDK (refer to `notes` directory for how I did it) there are addition libraries to links into the apps.
@@ -91,7 +98,7 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
 OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 cmake \
     -D CMAKE_BUILD_TYPE=Release \
-    -B build apps
+    -B build .
 
 cmake --build build --parallel 7
 ```
@@ -108,11 +115,13 @@ build/Optix7Gui/bin/optix7Gui -h
 
 # optixGui - FIXME: update path handling
 OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
-    build/OptixGui/bin/optixGui
+    build/apps/OptixGui/bin/optixGui
 
 # optix7Gui - FIXME: top-level build cannot locate texture images
-build/Optix7Gui/bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/Optix7Gui/bin/optix7Gui
+build/apps/Optix7Gui/bin/optix7Gui || \
+LD_PRELOAD=$LD_PRELOAD:/lib/x86_64-linux-gnu/libGL.so \
+ build/apps/Optix7Gui/bin/optix7Gui || \
+  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/apps/Optix7Gui/bin/optix7Gui
 ```
 
 Image renders and screencaps from `optixGui`

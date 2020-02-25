@@ -36,7 +36,7 @@ if(CMAKE_CUDA_COMPILER)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   endif()
   #set(CMAKE_CUDA_SEPARABLE_COMPILATION ON) # for multi-target pre-compilations
-  find_package(CUDA 7.0 REQUIRED)  # added when trying to debug RT_CALLABLE_PROGRAM missing
+  find_package(CUDA 7.0 REQUIRED)
 
   # Defines OptiX utilities and variables
   INCLUDE(configure_optix)
@@ -52,7 +52,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 # conan config and install dependencies
 #
 
-set(CONAN_CMAKE_SILENT_OUTPUT "ON")
+# With multi generators, conan_cmake_run expects a build_type to be provided
+if(UNIX AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+# WARNING: CMake caches most recent explicit CLI -DCMAKE_BUILD_TYPE for this option
+
+set(CONAN_CMAKE_SILENT_OUTPUT ON)
 
 # Download automatically, you can also just copy the conan.cmake file
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
@@ -121,7 +127,7 @@ set(CMAKE_PREFIX_PATH
 
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
 find_package(imgui CONFIG REQUIRED)
-find_package(glfw  CONFIG REQUIRED)
+# find_package(glfw  CONFIG REQUIRED) # switch to using system package instead
 find_package(glew  CONFIG REQUIRED)
 
 # see above for GLVND note
@@ -216,7 +222,7 @@ endif()
 # - move after conan, so uses GLEW headers from 2.1 dependency
 #
 
-message("OptiX_INCLUDE    = " "${OptiX_INCLUDE}")
+message("OptiX_INCLUDE      = " "${OptiX_INCLUDE}")
 
 set(SAMPLES_PTX_DIR "${CMAKE_BINARY_DIR}/lib/ptx")
 set(SAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -288,15 +294,19 @@ function(OPTIX_add_sample_executable target_name)
     OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
     imgui::imgui
     glew::glew
-    glfw::glfw
+    #glfw::glfw - switch to using system package instead
+    glfw
     ${optix_LIBRARY}
     ${IL_LIBRARIES}
     ${ILU_LIBRARIES}
     ${ILUT_LIBRARIES}
     )
 
-  message("optix_LIBRARY =      " "${optix_LIBRARY}")
-  message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+  message("optix_LIBRARY         = " " ${optix_LIBRARY}")
+  # message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+  # message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
+  # message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+  # message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
 
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)

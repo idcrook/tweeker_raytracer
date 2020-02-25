@@ -85,11 +85,18 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # For commonStructs.h, etc
 include_directories(${SAMPLES_INCLUDE_DIR})
 
-#find_package(imgui CONFIG)
-#include_directories("..")
-#include_directories(imgui::imgui)
-include_directories(${imgui_INCLUDE_DIRS_DEBUG})
+find_package(imgui CONFIG)
+#include_directories(${imgui_INCLUDE_DIRS_RELEASE})
 
+# conan package will look for swrast library and cause failure without LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
+# MESA-LOADER: failed to open swrast (search paths /home/conan/.conan/data/mesa/19.3.1/bincrafters/stable/package/c96b6c829b4e3e7620bf7229732d983d0697b955/lib/dri)
+# libGL error: failed to load driver: swrast
+# Error: 65543: GLX: Failed to create context: BadValue
+# Error: -2: glfwCreateWindow() failed.
+
+#find_package(glfw  CONFIG REQUIRED)
+# instead, install system package:
+# sudo apt install libglfw3-dev
 
 # Compile the cuda files to ptx.  Note that this will ignore all of the non CUDA
 # files.
@@ -112,6 +119,7 @@ endif()
 # variable will be empty.
 target_link_libraries(${sutil_target}
   optix
+  #glfw::glfw
   glfw
   imgui::imgui
   #imgui

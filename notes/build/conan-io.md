@@ -164,3 +164,18 @@ now should run
 ```
 LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./optixGui
 ```
+
+exporting and importing targets
+-------------------------------
+
+https://gitlab.kitware.com/cmake/community/-/wikis/doc/tutorials/Exporting-and-Importing-Targets#importing-targets
+
+In this case CMake does not know the library type, so it just puts the library on the link line as-is. Therefore on Windows there is no special treatment for a shared library. The runtime library (foo.dll) need not be found. The import library (foo.lib) is specified by the IMPORTED_LOCATION property, not the IMPORTED_IMPLIB property.
+
+sudo apt-get remove --auto-remove libgl1-mesa-dev
+
+The following packages will be REMOVED: freeglut3-dev libdrm-dev libegl1-mesa-dev libgl1-mesa-dev libgles1 libglfw3 libglfw3-dev libglu1-mesa-dev libglvnd-core-dev libglvnd-dev libice-dev libsm-dev libvulkan-dev libwayland-bin libwayland-dev libx11-xcb-dev libxcb-dri2-0-dev libxcb-dri3-dev libxcb-glx0-dev libxcb-present-dev libxcb-randr0-dev libxcb-render0-dev libxcb-shape0-dev libxcb-sync-dev libxcb-xfixes0-dev libxdamage-dev libxrandr-dev libxshmfence-dev libxt-dev libxxf86vm-dev mesa-common-dev x11proto-damage-dev x11proto-randr-dev x11proto-xf86vidmode-dev
+
+sudo apt install libglvnd-dev libglfw3-dev
+
+Suggested packages: libosmesa6 libglfw3-doc libwayland-doc

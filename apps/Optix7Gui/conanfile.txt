@@ -1,9 +1,8 @@
 [requires]
 imgui/1.75
-glfw/3.3.2@bincrafters/stable
+# glfw/3.3.2@bincrafters/stable # use system dev package instead
+# on ubuntu: sudo apt install libglfw3-dev
 glew/2.1.0@bincrafters/stable
-#assimp/5.0.1
-#DevIL/1.8.0@/stable
 
 [generators]
 cmake_find_package_multi

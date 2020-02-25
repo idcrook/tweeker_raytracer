@@ -94,6 +94,24 @@ int runApp(Options const& options)
   int widthClient  = std::max(1, options.getClientWidth());
   int heightClient = std::max(1, options.getClientHeight());
 
+// Decide GL version (set GL Hints before glfwCreateWindow)
+// glxinfo -B
+#if __APPLE__
+// GL 3.2
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);		   // Required on Mac
+  glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_FALSE); //
+#else
+// GL 3.0
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+  // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+#endif
+
   //glfwWindowHint(GLFW_DECORATED, windowBorder);
   //  "optix7Gui - Copyright (c) 2020 NVIDIA Corporation"
   GLFWwindow* window = glfwCreateWindow(widthClient, heightClient, "optix7Gui", NULL, NULL);
