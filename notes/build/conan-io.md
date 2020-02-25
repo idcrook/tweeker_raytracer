@@ -179,3 +179,12 @@ The following packages will be REMOVED: freeglut3-dev libdrm-dev libegl1-mesa-de
 sudo apt install libglvnd-dev libglfw3-dev
 
 Suggested packages: libosmesa6 libglfw3-doc libwayland-doc
+
+`sudo apt install libglew-dev`
+
+```
+The following additional packages will be installed:
+  libglu1-mesa-dev
+The following NEW packages will be installed:
+  libglew-dev libglu1-mesa-dev
+```

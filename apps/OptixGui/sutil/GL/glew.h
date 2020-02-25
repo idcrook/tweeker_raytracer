@@ -5,24 +5,24 @@
 ** Copyright (C) 2002-2008, Marcelo E. Magallon <mmagallo[]debian org>
 ** Copyright (C) 2002, Lev Povalahev
 ** All rights reserved.
-** 
-** Redistribution and use in source and binary forms, with or without 
+**
+** Redistribution and use in source and binary forms, with or without
 ** modification, are permitted provided that the following conditions are met:
-** 
-** * Redistributions of source code must retain the above copyright notice, 
+**
+** * Redistributions of source code must retain the above copyright notice,
 **   this list of conditions and the following disclaimer.
-** * Redistributions in binary form must reproduce the above copyright notice, 
-**   this list of conditions and the following disclaimer in the documentation 
+** * Redistributions in binary form must reproduce the above copyright notice,
+**   this list of conditions and the following disclaimer in the documentation
 **   and/or other materials provided with the distribution.
-** * The name of the author may be used to endorse or promote products 
+** * The name of the author may be used to endorse or promote products
 **   derived from this software without specific prior written permission.
 **
-** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
-** AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
+** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+** AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ** IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-** ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
-** LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
-** CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
+** ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+** LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+** CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
 ** SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
 ** INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 ** CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
@@ -56,7 +56,7 @@
 
 /*
 ** Copyright (c) 2007 The Khronos Group Inc.
-** 
+**
 ** Permission is hereby granted, free of charge, to any person obtaining a
 ** copy of this software and/or associated documentation files (the
 ** "Materials"), to deal in the Materials without restriction, including
@@ -64,10 +64,10 @@
 ** distribute, sublicense, and/or sell copies of the Materials, and to
 ** permit persons to whom the Materials are furnished to do so, subject to
 ** the following conditions:
-** 
+**
 ** The above copyright notice and this permission notice shall be included
 ** in all copies or substantial portions of the Materials.
-** 
+**
 ** THE MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ** EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ** MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -14699,67 +14699,67 @@ typedef void (GLAPIENTRY * PFNGLVIDEOCAPTURESTREAMPARAMETERIVNVPROC) (GLuint vid
 
 /* ------------------------ GL_OES_byte_coordinates ------------------------ */
 
-#ifndef GL_OES_byte_coordinates
-#define GL_OES_byte_coordinates 1
+/* #ifndef GL_OES_byte_coordinates */
+/* #define GL_OES_byte_coordinates 1 */
 
-#define GLEW_OES_byte_coordinates GLEW_GET_VAR(__GLEW_OES_byte_coordinates)
+/* #define GLEW_OES_byte_coordinates GLEW_GET_VAR(__GLEW_OES_byte_coordinates) */
 
-#endif /* GL_OES_byte_coordinates */
+/* #endif /\* GL_OES_byte_coordinates *\/ */
 
 /* ------------------- GL_OES_compressed_paletted_texture ------------------ */
 
-#ifndef GL_OES_compressed_paletted_texture
-#define GL_OES_compressed_paletted_texture 1
+/* #ifndef GL_OES_compressed_paletted_texture */
+/* #define GL_OES_compressed_paletted_texture 1 */
 
-#define GL_PALETTE4_RGB8_OES 0x8B90
-#define GL_PALETTE4_RGBA8_OES 0x8B91
-#define GL_PALETTE4_R5_G6_B5_OES 0x8B92
-#define GL_PALETTE4_RGBA4_OES 0x8B93
-#define GL_PALETTE4_RGB5_A1_OES 0x8B94
-#define GL_PALETTE8_RGB8_OES 0x8B95
-#define GL_PALETTE8_RGBA8_OES 0x8B96
-#define GL_PALETTE8_R5_G6_B5_OES 0x8B97
-#define GL_PALETTE8_RGBA4_OES 0x8B98
-#define GL_PALETTE8_RGB5_A1_OES 0x8B99
+/* #define GL_PALETTE4_RGB8_OES 0x8B90 */
+/* #define GL_PALETTE4_RGBA8_OES 0x8B91 */
+/* #define GL_PALETTE4_R5_G6_B5_OES 0x8B92 */
+/* #define GL_PALETTE4_RGBA4_OES 0x8B93 */
+/* #define GL_PALETTE4_RGB5_A1_OES 0x8B94 */
+/* #define GL_PALETTE8_RGB8_OES 0x8B95 */
+/* #define GL_PALETTE8_RGBA8_OES 0x8B96 */
+/* #define GL_PALETTE8_R5_G6_B5_OES 0x8B97 */
+/* #define GL_PALETTE8_RGBA4_OES 0x8B98 */
+/* #define GL_PALETTE8_RGB5_A1_OES 0x8B99 */
 
-#define GLEW_OES_compressed_paletted_texture GLEW_GET_VAR(__GLEW_OES_compressed_paletted_texture)
+/* #define GLEW_OES_compressed_paletted_texture GLEW_GET_VAR(__GLEW_OES_compressed_paletted_texture) */
 
-#endif /* GL_OES_compressed_paletted_texture */
+/* #endif /\* GL_OES_compressed_paletted_texture *\/ */
 
 /* --------------------------- GL_OES_read_format -------------------------- */
 
-#ifndef GL_OES_read_format
-#define GL_OES_read_format 1
+/* #ifndef GL_OES_read_format */
+/* #define GL_OES_read_format 1 */
 
-#define GL_IMPLEMENTATION_COLOR_READ_TYPE_OES 0x8B9A
-#define GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES 0x8B9B
+/* #define GL_IMPLEMENTATION_COLOR_READ_TYPE_OES 0x8B9A */
+/* #define GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES 0x8B9B */
 
-#define GLEW_OES_read_format GLEW_GET_VAR(__GLEW_OES_read_format)
+/* #define GLEW_OES_read_format GLEW_GET_VAR(__GLEW_OES_read_format) */
 
-#endif /* GL_OES_read_format */
+/* #endif /\* GL_OES_read_format *\/ */
 
-/* ------------------------ GL_OES_single_precision ------------------------ */
+/* /\* ------------------------ GL_OES_single_precision ------------------------ *\/ */
 
-#ifndef GL_OES_single_precision
-#define GL_OES_single_precision 1
+/* #ifndef GL_OES_single_precision */
+/* #define GL_OES_single_precision 1 */
 
-typedef void (GLAPIENTRY * PFNGLCLEARDEPTHFOESPROC) (GLclampf depth);
-typedef void (GLAPIENTRY * PFNGLCLIPPLANEFOESPROC) (GLenum plane, const GLfloat* equation);
-typedef void (GLAPIENTRY * PFNGLDEPTHRANGEFOESPROC) (GLclampf n, GLclampf f);
-typedef void (GLAPIENTRY * PFNGLFRUSTUMFOESPROC) (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f);
-typedef void (GLAPIENTRY * PFNGLGETCLIPPLANEFOESPROC) (GLenum plane, GLfloat* equation);
-typedef void (GLAPIENTRY * PFNGLORTHOFOESPROC) (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f);
+/* typedef void (GLAPIENTRY * PFNGLCLEARDEPTHFOESPROC) (GLclampf depth); */
+/* typedef void (GLAPIENTRY * PFNGLCLIPPLANEFOESPROC) (GLenum plane, const GLfloat* equation); */
+/* typedef void (GLAPIENTRY * PFNGLDEPTHRANGEFOESPROC) (GLclampf n, GLclampf f); */
+/* typedef void (GLAPIENTRY * PFNGLFRUSTUMFOESPROC) (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f); */
+/* typedef void (GLAPIENTRY * PFNGLGETCLIPPLANEFOESPROC) (GLenum plane, GLfloat* equation); */
+/* typedef void (GLAPIENTRY * PFNGLORTHOFOESPROC) (GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f); */
 
-#define glClearDepthfOES GLEW_GET_FUN(__glewClearDepthfOES)
-#define glClipPlanefOES GLEW_GET_FUN(__glewClipPlanefOES)
-#define glDepthRangefOES GLEW_GET_FUN(__glewDepthRangefOES)
-#define glFrustumfOES GLEW_GET_FUN(__glewFrustumfOES)
-#define glGetClipPlanefOES GLEW_GET_FUN(__glewGetClipPlanefOES)
-#define glOrthofOES GLEW_GET_FUN(__glewOrthofOES)
+/* #define glClearDepthfOES GLEW_GET_FUN(__glewClearDepthfOES) */
+/* #define glClipPlanefOES GLEW_GET_FUN(__glewClipPlanefOES) */
+/* #define glDepthRangefOES GLEW_GET_FUN(__glewDepthRangefOES) */
+/* #define glFrustumfOES GLEW_GET_FUN(__glewFrustumfOES) */
+/* #define glGetClipPlanefOES GLEW_GET_FUN(__glewGetClipPlanefOES) */
+/* #define glOrthofOES GLEW_GET_FUN(__glewOrthofOES) */
 
-#define GLEW_OES_single_precision GLEW_GET_VAR(__GLEW_OES_single_precision)
+/* #define GLEW_OES_single_precision GLEW_GET_VAR(__GLEW_OES_single_precision) */
 
-#endif /* GL_OES_single_precision */
+/* #endif /\* GL_OES_single_precision *\/ */
 
 /* ---------------------------- GL_OML_interlace --------------------------- */
 
@@ -18521,12 +18521,12 @@ GLEW_FUN_EXPORT PFNGLVIDEOCAPTURESTREAMPARAMETERDVNVPROC __glewVideoCaptureStrea
 GLEW_FUN_EXPORT PFNGLVIDEOCAPTURESTREAMPARAMETERFVNVPROC __glewVideoCaptureStreamParameterfvNV;
 GLEW_FUN_EXPORT PFNGLVIDEOCAPTURESTREAMPARAMETERIVNVPROC __glewVideoCaptureStreamParameterivNV;
 
-GLEW_FUN_EXPORT PFNGLCLEARDEPTHFOESPROC __glewClearDepthfOES;
-GLEW_FUN_EXPORT PFNGLCLIPPLANEFOESPROC __glewClipPlanefOES;
-GLEW_FUN_EXPORT PFNGLDEPTHRANGEFOESPROC __glewDepthRangefOES;
-GLEW_FUN_EXPORT PFNGLFRUSTUMFOESPROC __glewFrustumfOES;
-GLEW_FUN_EXPORT PFNGLGETCLIPPLANEFOESPROC __glewGetClipPlanefOES;
-GLEW_FUN_EXPORT PFNGLORTHOFOESPROC __glewOrthofOES;
+/* GLEW_FUN_EXPORT PFNGLCLEARDEPTHFOESPROC __glewClearDepthfOES; */
+/* GLEW_FUN_EXPORT PFNGLCLIPPLANEFOESPROC __glewClipPlanefOES; */
+/* GLEW_FUN_EXPORT PFNGLDEPTHRANGEFOESPROC __glewDepthRangefOES; */
+/* GLEW_FUN_EXPORT PFNGLFRUSTUMFOESPROC __glewFrustumfOES; */
+/* GLEW_FUN_EXPORT PFNGLGETCLIPPLANEFOESPROC __glewGetClipPlanefOES; */
+/* GLEW_FUN_EXPORT PFNGLORTHOFOESPROC __glewOrthofOES; */
 
 GLEW_FUN_EXPORT PFNGLALPHAFUNCXPROC __glewAlphaFuncx;
 GLEW_FUN_EXPORT PFNGLCLEARCOLORXPROC __glewClearColorx;
@@ -19210,10 +19210,10 @@ GLEW_VAR_EXPORT GLboolean __GLEW_NV_vertex_program3;
 GLEW_VAR_EXPORT GLboolean __GLEW_NV_vertex_program4;
 GLEW_VAR_EXPORT GLboolean __GLEW_NV_video_capture;
 GLEW_VAR_EXPORT GLboolean __GLEW_NV_viewport_array2;
-GLEW_VAR_EXPORT GLboolean __GLEW_OES_byte_coordinates;
-GLEW_VAR_EXPORT GLboolean __GLEW_OES_compressed_paletted_texture;
-GLEW_VAR_EXPORT GLboolean __GLEW_OES_read_format;
-GLEW_VAR_EXPORT GLboolean __GLEW_OES_single_precision;
+/* GLEW_VAR_EXPORT GLboolean __GLEW_OES_byte_coordinates; */
+/* GLEW_VAR_EXPORT GLboolean __GLEW_OES_compressed_paletted_texture; */
+/* GLEW_VAR_EXPORT GLboolean __GLEW_OES_read_format; */
+/* GLEW_VAR_EXPORT GLboolean __GLEW_OES_single_precision; */
 GLEW_VAR_EXPORT GLboolean __GLEW_OML_interlace;
 GLEW_VAR_EXPORT GLboolean __GLEW_OML_resample;
 GLEW_VAR_EXPORT GLboolean __GLEW_OML_subsample;

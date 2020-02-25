@@ -31,7 +31,7 @@ Uses conan as C++ dependency manager. In general this means
 ### install dev dependencies
 
 ```
-# includes libgl1-mesa-dev as dependency
+# includes libgl1-mesa-dev as dependency (OpenGL headers)
 sudo apt install libglvnd-dev libglfw3-dev
 ```
 
@@ -118,10 +118,26 @@ OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
     build/apps/OptixGui/bin/optixGui
 
 # optix7Gui - FIXME: top-level build cannot locate texture images
+build/apps/Optix7Gui/bin/optix7Gui
+```
+
+#### libGL / Mesa linked library loading issues
+
+If you get an error like
+
+```
+MESA-LOADER: failed to open swrast (search .conan/data/mesa/19.3.1/bincrafters/stable/package/a56cf85a12b68f87c51b8bc2331fe996caedb686/lib/dri)
+libGL error: failed to load driver: swrast
+Glfw Error 65543: GLX: Failed to create context: BadMatch
+```
+
+Something like this may help
+
+```
 build/apps/Optix7Gui/bin/optix7Gui || \
-LD_PRELOAD=$LD_PRELOAD:/lib/x86_64-linux-gnu/libGL.so \
- build/apps/Optix7Gui/bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/apps/Optix7Gui/bin/optix7Gui
+  LD_PRELOAD=$LD_PRELOAD:/lib/x86_64-linux-gnu/libGL.so \
+  build/apps/Optix7Gui/bin/optix7Gui || \
+    LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/apps/Optix7Gui/bin/optix7Gui
 ```
 
 Image renders and screencaps from `optixGui`

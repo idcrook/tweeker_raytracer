@@ -44,6 +44,9 @@ else()
   message(STATUS "No CUDA support")
 endif()
 
+# see above for GLVND note
+find_package(OpenGL REQUIRED)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
@@ -118,9 +121,9 @@ set(CMAKE_PREFIX_PATH
   ${CMAKE_PREFIX_PATH}
   )
 
-#message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+#message("CMAKE_PREFIX_PATH        = " "${CMAKE_PREFIX_PATH}")
 #message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
-#message("CMAKE_MODULE_PATH    = " "${CMAKE_MODULE_PATH}")
+#message("CMAKE_MODULE_PATH        = " "${CMAKE_MODULE_PATH}")
 
 # find_package will search CONFIG before MODULE with this turned ON
 #set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
@@ -128,18 +131,10 @@ set(CMAKE_PREFIX_PATH
 # These dependencies are installed using conan, CONFIG is implied by FIND_PACKAGE_PREFER_CONFIG ON
 find_package(imgui CONFIG REQUIRED)
 # find_package(glfw  CONFIG REQUIRED) # switch to using system package instead
-find_package(glew  CONFIG REQUIRED)
-
-# see above for GLVND note
-find_package(OpenGL REQUIRED)
+# find_package(glew  CONFIG REQUIRED) # switch to using system package instead
 
 # image loading - expect system developer package to be installed
 find_package(DevIL REQUIRED)
-
-
-if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
-  include_directories( ${OPENGL_INCLUDE_DIR} )
-endif()
 
 # message("OPENGL_FOUND          = " " ${OPENGL_FOUND}")
 # message("OPENGL_INCLUDE_DIR    = " " ${OPENGL_INCLUDE_DIR}")
@@ -152,7 +147,6 @@ INCLUDE_DIRECTORIES(
   "."
   ${IL_INCLUDE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/build
-  #${CMAKE_CURRENT_BINARY_DIR}/../bindings/.. # FIXME: needed for bindings/ at top-level
   )
 
 # # debug include_directories
@@ -162,16 +156,12 @@ INCLUDE_DIRECTORIES(
 #   message(STATUS "dir='${dir}'")
 # endforeach()
 
-
 # # Tells CMake to build all the libraries as shared libraries by default.  This can be
 # # overrided by individual libraries later.
 # set(BUILD_SHARED_LIBS ON)
 
 ##################################################################
 # CUDA config
-
-# Present the CUDA_64_BIT_DEVICE_CODE on the default set of options.
-mark_as_advanced(CLEAR CUDA_64_BIT_DEVICE_CODE)
 
 # Add some useful default arguments to the nvcc flags.  This is an example of how we use
 # PASSED_FIRST_CONFIGURE.  Once you have configured, this variable is TRUE and following
@@ -290,12 +280,12 @@ function(OPTIX_add_sample_executable target_name)
   # rule that specifies this linkage.
   target_link_libraries(  ${target_name}
     sutil_sdk
-    # OpenGL::GL
     OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
     imgui::imgui
-    glew::glew
+    #glew::glew - switch to using system package instead
     #glfw::glfw - switch to using system package instead
-    glfw
+    GLEW  # v2.1
+    glfw  # v3.3
     ${optix_LIBRARY}
     ${IL_LIBRARIES}
     ${ILU_LIBRARIES}
@@ -303,10 +293,10 @@ function(OPTIX_add_sample_executable target_name)
     )
 
   message("optix_LIBRARY         = " " ${optix_LIBRARY}")
-  # message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
-  # message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
-  # message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-  # message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
+  message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
+  message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
+  message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
+  message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
 
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)

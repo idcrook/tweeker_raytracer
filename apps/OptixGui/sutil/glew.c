@@ -3410,7 +3410,7 @@ GLboolean __GLEW_NV_vertex_program3 = GL_FALSE;
 GLboolean __GLEW_NV_vertex_program4 = GL_FALSE;
 GLboolean __GLEW_NV_video_capture = GL_FALSE;
 GLboolean __GLEW_NV_viewport_array2 = GL_FALSE;
-GLboolean __GLEW_OES_byte_coordinates = GL_FALSE;
+/* GLboolean __GLEW_OES_byte_coordinates = GL_FALSE; */
 /* GLboolean __GLEW_OES_compressed_paletted_texture = GL_FALSE; */
 /* GLboolean __GLEW_OES_read_format = GL_FALSE; */
 /* GLboolean __GLEW_OES_single_precision = GL_FALSE; */
@@ -9553,35 +9553,35 @@ static GLboolean _glewInit_GL_NV_video_capture (GLEW_CONTEXT_ARG_DEF_INIT)
 
 #endif /* GL_NV_viewport_array2 */
 
-#ifdef GL_OES_byte_coordinates
+/* #ifdef GL_OES_byte_coordinates */
 
-#endif /* GL_OES_byte_coordinates */
+/* #endif /\* GL_OES_byte_coordinates *\/ */
 
-#ifdef GL_OES_compressed_paletted_texture
+/* #ifdef GL_OES_compressed_paletted_texture */
 
-#endif /* GL_OES_compressed_paletted_texture */
+/* #endif /\* GL_OES_compressed_paletted_texture *\/ */
 
-#ifdef GL_OES_read_format
+/* #ifdef GL_OES_read_format */
 
-#endif /* GL_OES_read_format */
+/* #endif /\* GL_OES_read_format *\/ */
 
-#ifdef GL_OES_single_precision
+/* #ifdef GL_OES_single_precision */
 
-static GLboolean _glewInit_GL_OES_single_precision (GLEW_CONTEXT_ARG_DEF_INIT)
-{
-  GLboolean r = GL_FALSE;
+/* static GLboolean _glewInit_GL_OES_single_precision (GLEW_CONTEXT_ARG_DEF_INIT) */
+/* { */
+/*   GLboolean r = GL_FALSE; */
 
-  r = ((glClearDepthfOES = (PFNGLCLEARDEPTHFOESPROC)glewGetProcAddress((const GLubyte*)"glClearDepthfOES")) == NULL) || r;
-  r = ((glClipPlanefOES = (PFNGLCLIPPLANEFOESPROC)glewGetProcAddress((const GLubyte*)"glClipPlanefOES")) == NULL) || r;
-  r = ((glDepthRangefOES = (PFNGLDEPTHRANGEFOESPROC)glewGetProcAddress((const GLubyte*)"glDepthRangefOES")) == NULL) || r;
-  r = ((glFrustumfOES = (PFNGLFRUSTUMFOESPROC)glewGetProcAddress((const GLubyte*)"glFrustumfOES")) == NULL) || r;
-  r = ((glGetClipPlanefOES = (PFNGLGETCLIPPLANEFOESPROC)glewGetProcAddress((const GLubyte*)"glGetClipPlanefOES")) == NULL) || r;
-  r = ((glOrthofOES = (PFNGLORTHOFOESPROC)glewGetProcAddress((const GLubyte*)"glOrthofOES")) == NULL) || r;
+/*   r = ((glClearDepthfOES = (PFNGLCLEARDEPTHFOESPROC)glewGetProcAddress((const GLubyte*)"glClearDepthfOES")) == NULL) || r; */
+/*   r = ((glClipPlanefOES = (PFNGLCLIPPLANEFOESPROC)glewGetProcAddress((const GLubyte*)"glClipPlanefOES")) == NULL) || r; */
+/*   r = ((glDepthRangefOES = (PFNGLDEPTHRANGEFOESPROC)glewGetProcAddress((const GLubyte*)"glDepthRangefOES")) == NULL) || r; */
+/*   r = ((glFrustumfOES = (PFNGLFRUSTUMFOESPROC)glewGetProcAddress((const GLubyte*)"glFrustumfOES")) == NULL) || r; */
+/*   r = ((glGetClipPlanefOES = (PFNGLGETCLIPPLANEFOESPROC)glewGetProcAddress((const GLubyte*)"glGetClipPlanefOES")) == NULL) || r; */
+/*   r = ((glOrthofOES = (PFNGLORTHOFOESPROC)glewGetProcAddress((const GLubyte*)"glOrthofOES")) == NULL) || r; */
 
-  return r;
-}
+/*   return r; */
+/* } */
 
-#endif /* GL_OES_single_precision */
+/* #endif /\* GL_OES_single_precision *\/ */
 
 #ifdef GL_OML_interlace
 
@@ -12028,19 +12028,19 @@ GLenum GLEWAPIENTRY glewContextInit (GLEW_CONTEXT_ARG_DEF_LIST)
 #ifdef GL_NV_viewport_array2
   GLEW_NV_viewport_array2 = _glewSearchExtension("GL_NV_viewport_array2", extStart, extEnd);
 #endif /* GL_NV_viewport_array2 */
-#ifdef GL_OES_byte_coordinates
-  GLEW_OES_byte_coordinates = _glewSearchExtension("GL_OES_byte_coordinates", extStart, extEnd);
-#endif /* GL_OES_byte_coordinates */
-#ifdef GL_OES_compressed_paletted_texture
-  GLEW_OES_compressed_paletted_texture = _glewSearchExtension("GL_OES_compressed_paletted_texture", extStart, extEnd);
-#endif /* GL_OES_compressed_paletted_texture */
-#ifdef GL_OES_read_format
-  GLEW_OES_read_format = _glewSearchExtension("GL_OES_read_format", extStart, extEnd);
-#endif /* GL_OES_read_format */
-#ifdef GL_OES_single_precision
-  GLEW_OES_single_precision = _glewSearchExtension("GL_OES_single_precision", extStart, extEnd);
-  if (glewExperimental || GLEW_OES_single_precision) GLEW_OES_single_precision = !_glewInit_GL_OES_single_precision(GLEW_CONTEXT_ARG_VAR_INIT);
-#endif /* GL_OES_single_precision */
+/* #ifdef GL_OES_byte_coordinates */
+/*   GLEW_OES_byte_coordinates = _glewSearchExtension("GL_OES_byte_coordinates", extStart, extEnd); */
+/* #endif /\* GL_OES_byte_coordinates *\/ */
+/* #ifdef GL_OES_compressed_paletted_texture */
+/*   GLEW_OES_compressed_paletted_texture = _glewSearchExtension("GL_OES_compressed_paletted_texture", extStart, extEnd); */
+/* #endif /\* GL_OES_compressed_paletted_texture *\/ */
+/* #ifdef GL_OES_read_format */
+/*   GLEW_OES_read_format = _glewSearchExtension("GL_OES_read_format", extStart, extEnd); */
+/* #endif /\* GL_OES_read_format *\/ */
+/* #ifdef GL_OES_single_precision */
+/*   GLEW_OES_single_precision = _glewSearchExtension("GL_OES_single_precision", extStart, extEnd); */
+/*   if (glewExperimental || GLEW_OES_single_precision) GLEW_OES_single_precision = !_glewInit_GL_OES_single_precision(GLEW_CONTEXT_ARG_VAR_INIT); */
+/* #endif /\* GL_OES_single_precision *\/ */
 #ifdef GL_OML_interlace
   GLEW_OML_interlace = _glewSearchExtension("GL_OML_interlace", extStart, extEnd);
 #endif /* GL_OML_interlace */
@@ -18076,34 +18076,34 @@ GLboolean GLEWAPIENTRY glewIsSupported (const char* name)
       }
       if (_glewStrSame2(&pos, &len, (const GLubyte*)"OES_", 4))
       {
-#ifdef GL_OES_byte_coordinates
-        if (_glewStrSame3(&pos, &len, (const GLubyte*)"byte_coordinates", 16))
-        {
-          ret = GLEW_OES_byte_coordinates;
-          continue;
-        }
-#endif
-#ifdef GL_OES_compressed_paletted_texture
-        if (_glewStrSame3(&pos, &len, (const GLubyte*)"compressed_paletted_texture", 27))
-        {
-          ret = GLEW_OES_compressed_paletted_texture;
-          continue;
-        }
-#endif
-#ifdef GL_OES_read_format
-        if (_glewStrSame3(&pos, &len, (const GLubyte*)"read_format", 11))
-        {
-          ret = GLEW_OES_read_format;
-          continue;
-        }
-#endif
-#ifdef GL_OES_single_precision
-        if (_glewStrSame3(&pos, &len, (const GLubyte*)"single_precision", 16))
-        {
-          ret = GLEW_OES_single_precision;
-          continue;
-        }
-#endif
+/* #ifdef GL_OES_byte_coordinates */
+/*         if (_glewStrSame3(&pos, &len, (const GLubyte*)"byte_coordinates", 16)) */
+/*         { */
+/*           ret = GLEW_OES_byte_coordinates; */
+/*           continue; */
+/*         } */
+/* #endif */
+/* #ifdef GL_OES_compressed_paletted_texture */
+/*         if (_glewStrSame3(&pos, &len, (const GLubyte*)"compressed_paletted_texture", 27)) */
+/*         { */
+/*           ret = GLEW_OES_compressed_paletted_texture; */
+/*           continue; */
+/*         } */
+/* #endif */
+/* #ifdef GL_OES_read_format */
+/*         if (_glewStrSame3(&pos, &len, (const GLubyte*)"read_format", 11)) */
+/*         { */
+/*           ret = GLEW_OES_read_format; */
+/*           continue; */
+/*         } */
+/* #endif */
+/* #ifdef GL_OES_single_precision */
+/*         if (_glewStrSame3(&pos, &len, (const GLubyte*)"single_precision", 16)) */
+/*         { */
+/*           ret = GLEW_OES_single_precision; */
+/*           continue; */
+/*         } */
+/* #endif */
       }
       if (_glewStrSame2(&pos, &len, (const GLubyte*)"OML_", 4))
       {

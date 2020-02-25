@@ -79,6 +79,9 @@ else()
   message(FATAL_ERROR "CMake did not find CUDA, which is required to build this program.")
 endif()
 
+# see above for GLVND note
+find_package(OpenGL REQUIRED)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
@@ -160,19 +163,11 @@ set(CMAKE_PREFIX_PATH
 # modules into the default modules directory
 find_package(imgui  CONFIG REQUIRED)
 #find_package(glfw   CONFIG REQUIRED) # switch to using system package instead
-find_package(glew   CONFIG REQUIRED)
+#find_package(glew   CONFIG REQUIRED) # switch to using system package instead
 
-#find_package(OptiX7 REQUIRED)    # Located above
-#find_package(CUDA 10.0 REQUIRED) # Located above
-#find_package(OpenGL REQUIRED COMPONENTS OpenGL GLX)
-find_package(OpenGL REQUIRED )
 #find_package(DevIL_1_8_0 REQUIRED)
 #find_package(DevIL_1_7_8 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is the system package version on ubuntu
-
-# if ( OPENGL_FOUND AND OPENGL_INCLUDE_DIR )
-#   include_directories( ${OPENGL_INCLUDE_DIR} )
-# endif()
 
 # TBD Usage report verbosity - Currently unimplemented
 set(OPTIX7GUI_USAGE_REPORT_VERBOSITY "0" CACHE STRING "Verbosity of OptiX usage report (0 disables reporting).")
@@ -350,12 +345,11 @@ endif()
 
 target_link_libraries( optix7Gui PUBLIC
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
-  OpenGL::GLX    #
-  ${OPENGL_LIBRARIES}
   imgui::imgui
-  glew::glew
-  #glfw::glfw # switch to using system package instead
-  glfw
+  # glew::glew # switch to using system package instead
+  # glfw::glfw # switch to using system package instead
+  GLEW  # v2.1
+  glfw  # v3.3
   #${CUDA_LIBRARIES} # runtime libraries
   ${CUDA_CUDA_LIBRARY} # driver library (for OptiX7)
   ${IL_LIBRARIES}
@@ -364,14 +358,14 @@ target_link_libraries( optix7Gui PUBLIC
 )
 
 #
+message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
 message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
 message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
 message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
 #
 # message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
 message("CUDA_LIBRARIES        = " " ${CUDA_LIBRARIES}")
 
-# if (UNIX)
-#   target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
-# endif()
+if (UNIX)
+  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
+endif()

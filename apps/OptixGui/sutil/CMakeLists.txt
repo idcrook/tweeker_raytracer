@@ -98,6 +98,9 @@ find_package(imgui CONFIG)
 # instead, install system package:
 # sudo apt install libglfw3-dev
 
+#for glew linkage
+# sudo apt install libglew-dev
+
 # Compile the cuda files to ptx.  Note that this will ignore all of the non CUDA
 # files.
 CUDA_COMPILE_PTX(ptx_files ${sources})
@@ -119,6 +122,7 @@ endif()
 # variable will be empty.
 target_link_libraries(${sutil_target}
   optix
+  GLEW
   #glfw::glfw
   glfw
   imgui::imgui
