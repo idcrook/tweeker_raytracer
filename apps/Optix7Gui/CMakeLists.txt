@@ -163,6 +163,7 @@ find_package(imgui  CONFIG REQUIRED)
 #find_package(glew   CONFIG REQUIRED) # switch to glad
 find_package(glad   CONFIG REQUIRED)
 
+find_package(GLFW REQUIRED)
 #find_package(DevIL_1_8_0 REQUIRED)
 #find_package(DevIL_1_7_8 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is the system package version on ubuntu
