@@ -577,13 +577,14 @@ void Application::guiRender()
 
 void Application::getSystemInformation()
 {
+
   int versionDriver = 0;
   CU_CHECK( cuDriverGetVersion(&versionDriver) );
 
   // The version is returned as (1000 * major + 10 * minor).
   int major =  versionDriver / 1000;
   int minor = (versionDriver - major * 1000) / 10;
-  std::cout << "Driver Version  = " << major << "." << minor << std::endl;
+  std::cout << "CUDA Driver Version  = " << major << "." << minor << std::endl;
 
   int countDevices = 0;
   CU_CHECK( cuDeviceGetCount(&countDevices) );
@@ -850,6 +851,12 @@ bool Application::initOptiX()
     std::cerr << "ERROR: initOptiX() cuInit() failed: " << cuRes << std::endl;
     return false;
   }
+
+  unsigned int optixVersion = (OPTIX_VERSION);
+  unsigned int major =  optixVersion / 10000;
+  unsigned int minor = (optixVersion % 10000) / 100;
+  unsigned int micro =  optixVersion % 100;
+  std::cerr << "INFO: Built with OptiX " << major << "." << minor << "." << micro << std::endl;
 
   getSystemInformation(); // Get device attributes of all found devices. Fills m_deviceAttributes.
 
