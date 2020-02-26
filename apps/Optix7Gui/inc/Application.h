@@ -59,18 +59,27 @@
 #include "bindings/imgui_impl_opengl3.h"
 // #include "bindings/imgui_impl_glfw_gl3.h"
 
+#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
+#include <GL/gl3w.h>  // Initialize with gl3wInit()
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
 #ifndef __APPLE__
 #  include <GL/glew.h>
 #  if defined( _WIN32 )
 #    include <GL/wglew.h>
 #  endif
 #endif
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
+#include <glad/glad.h>  // Initialize with gladLoadGL()
+#else
+#include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
+#endif
+
 
 // Needs to be included after OpenGL headers!
 // CUDA Driver API version.
 #include <cudaGL.h>
 
-
+// Include glfw3.h after  OpenGL definitions
 #include <GLFW/glfw3.h>
 
 #include "inc/Options.h"
@@ -96,6 +105,7 @@
 #define APP_ERROR_CREATE_WINDOW  -2
 #define APP_ERROR_GLFW_INIT      -3
 #define APP_ERROR_GLEW_INIT      -4
+#define APP_ERROR_OPENGL_LOADER_INIT      (APP_ERROR_GLEW_INIT)
 #define APP_ERROR_APP_INIT       -5
 
 

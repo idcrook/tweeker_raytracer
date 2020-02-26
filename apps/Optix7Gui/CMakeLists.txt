@@ -160,7 +160,8 @@ set(CMAKE_PREFIX_PATH
 # modules into the default modules directory
 find_package(imgui  CONFIG REQUIRED)
 #find_package(glfw   CONFIG REQUIRED) # switch to using system package instead
-#find_package(glew   CONFIG REQUIRED) # switch to using system package instead
+#find_package(glew   CONFIG REQUIRED) # switch to glad
+find_package(glad   CONFIG REQUIRED)
 
 #find_package(DevIL_1_8_0 REQUIRED)
 #find_package(DevIL_1_7_8 REQUIRED)
@@ -315,8 +316,8 @@ message("CUDA_TOOLKIT_INCLUDE  = " "${CUDA_TOOLKIT_INCLUDE}")
 # )
 target_compile_definitions(optix7Gui PRIVATE "_CRT_SECURE_NO_WARNINGS")
 
-# are using GLEW opengl loader
-target_compile_definitions(optix7Gui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
+# select which opengl loader
+target_compile_definitions(optix7Gui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 
 target_include_directories(optix7Gui PUBLIC
@@ -336,8 +337,9 @@ target_link_libraries( optix7Gui PUBLIC
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
   imgui::imgui
   # glew::glew # switch to using system package instead
+  #GLEW  # v2.1 - using glad instead
+  glad::glad
   # glfw::glfw # switch to using system package instead
-  GLEW  # v2.1
   glfw  # v3.3
   #${CUDA_LIBRARIES} # runtime libraries
   ${CUDA_CUDA_LIBRARY} # driver library (for OptiX7)

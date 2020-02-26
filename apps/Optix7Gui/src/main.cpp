@@ -91,8 +91,8 @@ void keyCallback( GLFWwindow* window, int key, int scancode, int action, int mod
 
 int runApp(Options const& options)
 {
-  int widthClient  = std::max(1, options.getClientWidth());
-  int heightClient = std::max(1, options.getClientHeight());
+  GLint widthClient  = std::max(1, options.getClientWidth());
+  GLint heightClient = std::max(1, options.getClientHeight());
 
 // Decide GL version (set GL Hints before glfwCreateWindow)
 // glxinfo -B
@@ -104,15 +104,16 @@ int runApp(Options const& options)
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);		   // Required on Mac
   glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_FALSE); //
 #else
-// GL 3.0
+  // GL 3.0 - empirically determined on ubuntu 19.10
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
   // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
   // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
   //glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
 #endif
-
-  //glfwWindowHint(GLFW_DECORATED, windowBorder);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+  glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+  //glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
   //  "optix7Gui - Copyright (c) 2020 NVIDIA Corporation"
   GLFWwindow* window = glfwCreateWindow(widthClient, heightClient, "optix7Gui", NULL, NULL);
   if (!window)
@@ -123,12 +124,37 @@ int runApp(Options const& options)
   }
 
   glfwMakeContextCurrent(window);
+  //glfwSwapInterval(1); // Enable vsync
 
-  if (glewInit() != GL_NO_ERROR)
+// Initialize OpenGL loader
+#if defined(IMGUI_IMPL_OPENGL_LOADER_GL3W)
+  bool err = gl3wInit() != 0;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLEW)
+  bool err = glewInit() != GLEW_OK;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLAD)
+  bool err = gladLoadGL() == 0;
+#elif defined(IMGUI_IMPL_OPENGL_LOADER_GLBINDING)
+  bool err = false;
+  glbinding::initialize([](const char* name) { return (glbinding::ProcAddress)glfwGetProcAddress(name); });
+#else
+  bool err = false; // If you use IMGUI_IMPL_OPENGL_LOADER_CUSTOM, your loader is likely to requires some form of initialization.
+#endif
+
+  if (err != GL_NO_ERROR)
   {
-    error_callback(APP_ERROR_GLEW_INIT, "GLEW failed to initialize.");
+    error_callback(APP_ERROR_OPENGL_LOADER_INIT, "OpenGL Loader failed to initialize.");
     glfwTerminate();
-    return APP_ERROR_GLEW_INIT;
+    return APP_ERROR_OPENGL_LOADER_INIT;
+  }
+  else
+  {
+    std::cerr << "INFO: OpenGL renderer: " << glGetString(GL_RENDERER) << std::endl;
+    std::cerr << "INFO: OpenGL version in GLFW window context: "
+              << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR)
+              << "."
+              << glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR)
+              << std::endl;
+    std::cerr << "INFO: GLFW version: " << glfwGetVersionString() << std::endl;
   }
 
   // Note: imgui now saves and chains any glfw callbacks registered
