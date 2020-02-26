@@ -103,9 +103,9 @@ cmake \
 cmake --build build --parallel 7
 
 # can specify a target
-cmake --build build --target optixGui --parallel 7
+cmake --build build --target optixGui  --parallel 7
 cmake --build build --target optix7Gui --parallel 7
-
+cmake --build build --target rtigo3    --parallel 7
 
 ```
 
@@ -125,6 +125,11 @@ OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
 
 # optix7Gui - FIXME: top-level build cannot locate internal texture images
 build/apps/Optix7Gui/bin/optix7Gui
+
+# rtigo3 - FIXME: app crashes if image textures are not found
+cd apps/rtigo3/data
+/path/to/tweeker_raytracer/build/apps/rtigo3/bin/rtigo3 \
+  -s ./system_rtigo3_cornell_box.txt -d ./scene_rtigo3_cornell_box.txt
 ```
 
 #### libGL / Mesa linked library loading issues

@@ -158,8 +158,8 @@ set_property(CACHE OPTIX7GUI_USAGE_REPORT_VERBOSITY PROPERTY STRINGS 0 1 2 3)
 
 option(OPTIX7GUI_USE_DEBUG_EXCEPTIONS "Enables advanced exception handling and error checking for debugging purposes." OFF)
 
-# NOTE below, without "--relocatable-device-code=true" flag, will receive warning:
-# /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/shaders/miss.cu(38): warning: extern declaration of the entity sysParameter is treated as a static definition
+# NOTE below, without "--relocatable-device-code=true" flag, will receive warnings like:
+# shaders/miss.cu(38): warning: extern declaration of the entity sysParameter is treated as a static definition
 
 # Flags to compile kernels to PTX
 if (OPTIX7GUI_USE_DEBUG_EXCEPTIONS)
@@ -299,11 +299,11 @@ set( CUDA_SHADERS_HEADERS
 )
 
 # CUDA_SHADERS_HEADERS are colocated in same directory
-add_library(shadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS} )
-set_property(TARGET shadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
-target_include_directories(shadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
+add_library(rtigo3ShadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS} )
+set_property(TARGET rtigo3ShadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
+target_include_directories(rtigo3ShadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
 # where PTX.h will get placed
-target_include_directories(shadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_include_directories(rtigo3ShadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 # Retrieve bin2c util
 get_filename_component(cuda_compiler_bin "${CMAKE_CUDA_COMPILER}" DIRECTORY)
@@ -325,11 +325,11 @@ add_custom_command(
     OUTPUT "${headerPathPTX}"
     COMMAND ${CMAKE_COMMAND}
     "-DBIN_TO_C_COMMAND=${bin_to_c}"
-    "-DOBJECTS=$<TARGET_OBJECTS:shadersPTX>"
+    "-DOBJECTS=$<TARGET_OBJECTS:rtigo3ShadersPTX>"
     "-DOUTPUT=${headerPathPTX}"
     -P ${PROJECT_SOURCE_DIR}/../CMake/bin2c_wrapper.cmake
     VERBATIM
-    DEPENDS $<TARGET_OBJECTS:shadersPTX>
+    DEPENDS $<TARGET_OBJECTS:rtigo3ShadersPTX>
     COMMENT "Converting PTX files to a C header" "${headerPathPTX}"
 )
 
@@ -358,7 +358,7 @@ add_executable( rtigo3
   ${headerPathPTX}
 )
 
-add_dependencies(rtigo3 shadersPTX)
+add_dependencies(rtigo3 rtigo3ShadersPTX)
 
 # add_definitions(
 #   # Disable warnings for file operations fopen etc.
@@ -401,3 +401,17 @@ target_link_libraries( rtigo3 PUBLIC
 if (UNIX)
   target_link_libraries( rtigo3 PRIVATE dl ${CMAKE_DL_LIBS})
 endif()
+
+if ("${CMAKE_BINARY_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
+  set(relative "./")
+else()
+  set(relative "build/")
+endif()
+
+# print out
+string(REPLACE "${CMAKE_SOURCE_DIR}/build/" ${relative} target_bin "${CMAKE_CURRENT_BINARY_DIR}/bin/rtigo3")
+
+message(STATUS "Will build ${target_bin}")
+
+add_custom_command(TARGET rtigo3 POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan " ${target_bin}")
