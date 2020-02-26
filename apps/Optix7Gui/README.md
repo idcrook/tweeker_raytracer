@@ -5,7 +5,11 @@ Using conan as C++ dependency manager
 2.	Clone this repo:
 3.	Install dependencies (via `conan`), compile and run
 
-Assumes DevIL headers and library are installed on system.
+Assumes headers and library are installed on system:
+
+-	DevIL
+-	GLEW
+-	glfw
 
 Notes
 -----
@@ -26,7 +30,7 @@ ln -s /path/to/OptiX_Apps/data data
 Linux
 -----
 
-Any build will require pointing to SDK. Not yet working from top-level CMake.
+Any build will require pointing to SDK.
 
 ```bash
 # navigate to top-level of this repo, then:
@@ -34,18 +38,14 @@ cd apps/Optix7Gui
 mkdir build
 cd build
 
-OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
+cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
     -B . ..
 
 cmake --build build --target optix7Gui --parallel 7
 
-./bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
-
-LD_PRELOAD=$LD_PRELOAD:/lib/x86_64-linux-gnu/libGL.so \
-   bin/optix7Gui
-
+./bin/optix7Gui
 ```
 
 Top-level build
@@ -60,9 +60,7 @@ OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
 
 cmake --build build --target optix7Gui --parallel 7
 
-build/apps/Optix7Gui/bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu build/apps/Optix7Gui/bin/optix7Gui
-
+build/apps/Optix7Gui/bin/optix7Gui
 ```
 
 ### Debug build
@@ -74,15 +72,14 @@ mkdir build
 cd build
 
 # run cmake generate (runs conan inside)
-OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 cmake \
+OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
+cmake \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug \
     -B . ..
 
 cmake --build . --target optix7Gui --parallel 7
 
-./bin/optix7Gui || \
-  LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu ./bin/optix7Gui
-
+./bin/optix7Gui
 ```
 
 setting up in `cuda-gdb`
@@ -90,7 +87,7 @@ setting up in `cuda-gdb`
 ```shell
 cd /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/build
 file bin/optix7Gui
-set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
+#set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu
 run
 ```
 

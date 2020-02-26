@@ -1,13 +1,13 @@
 cmake_minimum_required ( VERSION 3.8 )
 
 project ( OptixGui VERSION 0.1.0  )
-message("\nPROJECT_NAME = " "${PROJECT_NAME}")
-message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
+message("\nTOP PROJECT = " "${CMAKE_PROJECT_NAME}")
+message("PROJECT_NAME = " "${PROJECT_NAME}")
 
 # set to match your path
 set(OptiX_INSTALL_DIR "/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/"
   CACHE PATH "Path to OptiX installed location.")
-# can override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+# override on cmake command line with: -DOptiX_INSTALL_DIR="/path/to/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 
 
 # As of CMake 2.6 policies were introduced in order to provide a mechanism for
@@ -47,10 +47,6 @@ endif()
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-
 ##################################################################
 # conan config and install dependencies
 #
@@ -72,14 +68,14 @@ endif()
 
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 
-# remote needed to workaround for busted main repo libx11 dependency from glfw
-##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
-##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
+# # remote needed to workaround for busted main repo libx11 dependency from glfw
+# ##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
+# ##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
 
-conan_add_remote(
-  NAME bincrafters
-  URL https://api.bintray.com/conan/bincrafters/public-conan
-  )
+# conan_add_remote(
+#   NAME bincrafters
+#   URL https://api.bintray.com/conan/bincrafters/public-conan
+#   )
 
 # BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
 # mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
@@ -121,10 +117,6 @@ set(CMAKE_PREFIX_PATH
   ${CMAKE_PREFIX_PATH}
   )
 
-#message("CMAKE_PREFIX_PATH        = " "${CMAKE_PREFIX_PATH}")
-#message("CMAKE_CURRENT_BINARY_DIR = " "${CMAKE_CURRENT_BINARY_DIR}")
-#message("CMAKE_MODULE_PATH        = " "${CMAKE_MODULE_PATH}")
-
 # find_package will search CONFIG before MODULE with this turned ON
 #set(CMAKE_FIND_PACKAGE_PREFER_CONFIG ON)
 
@@ -136,21 +128,13 @@ find_package(imgui CONFIG REQUIRED)
 # image loading - expect system developer package to be installed
 find_package(DevIL REQUIRED)
 
-# message("OPENGL_FOUND          = " " ${OPENGL_FOUND}")
-# message("OPENGL_INCLUDE_DIR    = " " ${OPENGL_INCLUDE_DIR}")
-# message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-# message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
-# message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
-
 # for local source includes and devil
 INCLUDE_DIRECTORIES(
   "."
   ${IL_INCLUDE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/build
   )
 
 # # debug include_directories
-
 # get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 # foreach(dir ${dirs})
 #   message(STATUS "dir='${dir}'")
@@ -242,6 +226,8 @@ include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/sutil
 
 set(SAMPLES_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/device_include)
 
+# Our sutil library.  The rules to build it are found in the subdirectory.
+add_subdirectory(sutil)
 
 #########################################################
 # OPTIX_add_sample_executable
@@ -293,6 +279,8 @@ function(OPTIX_add_sample_executable target_name)
     )
 
   message("optix_LIBRARY         = " " ${optix_LIBRARY}")
+  message("OPENGL_FOUND          = " " ${OPENGL_FOUND}")
+  message("OPENGL_INCLUDE_DIR    = " " ${OPENGL_INCLUDE_DIR}")
   message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
   message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
   message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
@@ -301,15 +289,25 @@ function(OPTIX_add_sample_executable target_name)
   # are using GLEW opengl loader
   target_compile_definitions( ${target_name} PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
-  if(USING_GNU_CXX)
-    target_link_libraries( ${target_name} m ) # Explicitly link against math library (C samples don't do that by default)
+  if ("${CMAKE_BINARY_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
+    set(relative "./")
+  else()
+    set(relative "build/")
   endif()
+
+  # print out
+  string(REPLACE "${CMAKE_SOURCE_DIR}/build/" ${relative} target_bin "${CMAKE_CURRENT_BINARY_DIR}/bin/${target_name}")
+
+  message(STATUS "Will build ${target_bin}")
+
+  add_custom_command(TARGET ${target_name} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan " ${target_bin}")
+
+  # if(USING_GNU_CXX)
+  #   target_link_libraries( ${target_name} m ) # Explicitly link against math library (C samples don't do that by default)
+  # endif()
 endfunction()
 
-
-
-# Our sutil library.  The rules to build it are found in the subdirectory.
-add_subdirectory(sutil)
 
 OPTIX_add_sample_executable( optixGui
   main.cpp

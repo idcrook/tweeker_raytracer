@@ -30,9 +30,9 @@ Uses conan as C++ dependency manager. In general this means
 
 ### install dev dependencies
 
-```
-# includes libgl1-mesa-dev as dependency (OpenGL headers)
-sudo apt install libglvnd-dev libglfw3-dev
+```shell
+sudo apt install libglvnd-dev libglfw3-dev libglew-dev
+#   includes libgl1-mesa-dev as dependency (OpenGL headers)
 ```
 
 ### Other Third-party dependencies
@@ -43,7 +43,7 @@ In addition to baseline requirements of CUDA SDK and Optix 6.5 and/or Optix 7.0 
 
 http://openil.sourceforge.net/
 
-Dependency not available in `conan` but should be available via system package manager.
+Available via system package manager.
 
 ```shell
 sudo apt install libdevil-dev
@@ -61,8 +61,8 @@ Apps
 
 OptiX 6.5 imgui
 
--	Uses imgui (using GLFW and OpenGL3 via GLEW)
-	-	These are installed using conan.io
+-	Uses imgui (via GLFW + OpenGL3 via GLEW)
+	-	Installed using conan.io
 -	Uses DevIL image library
 -	Assumes [optix_advanced_samples](https://github.com/nvpro-samples/optix_advanced_samples) repo is available for its texture files
 
@@ -75,8 +75,8 @@ See respective [README.md](apps/OptixGui/README.md) for build instructions and `
 
 OptiX 7 imgui
 
--	Uses imgui (using GLFW and OpenGL3 via GLEW)
-	-	These are installed using conan.io
+-	Uses imgui (via GLFW + OpenGL3 via GLEW)
+	-	Installed using conan.io
 -	Uses DevIL image library
 -	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for its texture files
 
@@ -97,10 +97,16 @@ cd tweeker_raytracer
 OPTIX7_PATH=/usr/local/nvidia/NVIDIA-OptiX-SDK-7.0.0-linux64 \
 OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 cmake \
-    -D CMAKE_BUILD_TYPE=Release \
     -B build .
 
+# this will build all targets
 cmake --build build --parallel 7
+
+# can specify a target
+cmake --build build --target optixGui --parallel 7
+cmake --build build --target optix7Gui --parallel 7
+
+
 ```
 
 ### Run
@@ -110,14 +116,14 @@ After a successful build
 ```shell
 cd tweeker_raytracer # top-level directory again
 
-build/OptixGui/bin/optixGui -h
-build/Optix7Gui/bin/optix7Gui -h
+build/apps/OptixGui/bin/optixGui -h
+build/apps/Optix7Gui/bin/optix7Gui -h
 
 # optixGui - FIXME: update path handling
 OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
     build/apps/OptixGui/bin/optixGui
 
-# optix7Gui - FIXME: top-level build cannot locate texture images
+# optix7Gui - FIXME: top-level build cannot locate internal texture images
 build/apps/Optix7Gui/bin/optix7Gui
 ```
 

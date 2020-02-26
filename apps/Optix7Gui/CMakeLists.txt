@@ -30,7 +30,8 @@ cmake_minimum_required(VERSION 3.8)
 project( Optix7Gui
   VERSION 0.1.0
   )
-message("\nPROJECT_NAME = " "${PROJECT_NAME}")
+message("\nTOP PROJECT = " "${CMAKE_PROJECT_NAME}")
+message("PROJECT_NAME = " "${PROJECT_NAME}")
 
 cmake_policy(VERSION 3.8)
 
@@ -81,10 +82,6 @@ endif()
 
 # see above for GLVND note
 find_package(OpenGL REQUIRED)
-
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 ##################################################################
 # conan config and install dependencies
@@ -328,20 +325,12 @@ target_include_directories(optix7Gui PUBLIC
   # $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
 )
 target_include_directories(optix7Gui PRIVATE
-  ${CMAKE_CURRENT_BINARY_DIR}/include
   ${CUDA_TOOLKIT_INCLUDE}
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
   ${OPTIX7_INCLUDE_DIR}
   ${IL_INCLUDE_DIR}
 )
 
-
-if (UNIX)
-  set_target_properties( optix7Gui PROPERTIES
-    #IMPORTED_LINK_INTERFACE_LIBRARIES "${OPENGL_LIBRARIES}"
-    IMPORTED_LINK_INTERFACE_LIBRARIES "${OPENGL_LIBRARIES}"
-    )
-endif()
 
 target_link_libraries( optix7Gui PUBLIC
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
@@ -357,6 +346,10 @@ target_link_libraries( optix7Gui PUBLIC
   ${ILUT_LIBRARIES}
 )
 
+if (UNIX)
+  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
+endif()
+
 #
 message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
 message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
@@ -366,6 +359,16 @@ message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
 # message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
 message("CUDA_LIBRARIES        = " " ${CUDA_LIBRARIES}")
 
-if (UNIX)
-  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
+if ("${CMAKE_BINARY_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
+  set(relative "./")
+else()
+  set(relative "build/")
 endif()
+
+# print out
+string(REPLACE "${CMAKE_SOURCE_DIR}/build/" ${relative} target_bin "${CMAKE_CURRENT_BINARY_DIR}/bin/optix7Gui")
+
+message(STATUS "Will build ${target_bin}")
+
+add_custom_command(TARGET optix7Gui POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan " ${target_bin}")

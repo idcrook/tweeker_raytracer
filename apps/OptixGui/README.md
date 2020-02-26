@@ -5,7 +5,11 @@ Using conan as C++ dependency manager
 2.	Clone this repo:
 3.	Install dependencies (via `conan`), compile and run
 
-Assumes DevIL headers and library are installed on system.
+Assumes headers and library are installed on system:
+
+-	DevIL
+-	GLEW
+-	glfw
 
 ### Point to samples directory
 
@@ -35,9 +39,9 @@ cd apps/OptixGui
 mkdir build
 cd build
 
+OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
 cmake \
-    -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
     -B . ..
 
@@ -46,28 +50,27 @@ cmake --build . --target optixGui --parallel 7
 bin/optixGui
 ```
 
-conan also works to download from top-level
+### Debug build
 
-```shell
-# navigate to repo clone toplevel
-cd tweeker_raytracer
+```bash
+# navigate to top-level of this clone, then:
+cd apps/OptixGui
+mkdir build
+cd build
 
-# Now, run CMake generate stage at top-level
-# Assumes you have already run conan in each of the lower directories
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Release \
- -D OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
- -DCMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
- -B build .
+OptiX_INSTALL_DIR="/usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/" \
+cmake \
+  -D CMAKE_BUILD_TYPE=Debug \
+  -D CMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -D CMAKE_CUDA_FLAGS="--use_fast_math --generate-line-info" \
+  -B . ..
 
-# Build binary target
-cmake --build build --target optixGui --parallel 7
+cmake --build . --target optixGui --parallel 7
 
-# FIXME: update path handling
-OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
-    build/apps/OptixGui/bin/optixGui
+bin/optixGui
 ```
 
-change `-DCMAKE_BUILD_TYPE=Release` to `-DCMAKE_BUILD_TYPE=Debug` in the above commands to get debug versions of dependencies, etc.
+swap `-DCMAKE_BUILD_TYPE=Release` from `-DCMAKE_BUILD_TYPE=Debug` in the above commands to get Release version of dependencies, etc.
 
 ### setting up in cuda-gdb
 
