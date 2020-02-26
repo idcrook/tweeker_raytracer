@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,12 +32,14 @@
 
 #include "shaders/compositor_data.h"
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
+// #include <GL/glew.h>
+// #if defined( _WIN32 )
+// #include <GL/wglew.h>
+// #endif
 
-// CUDA Driver API version of the OpenGL interop header. 
+// CUDA Driver API version of the OpenGL interop header.
 #include <cudaGL.h>
 
 #include <algorithm>
@@ -56,6 +58,7 @@ DeviceMultiGPULocalCopy::DeviceMultiGPULocalCopy(const RendererStrategy strategy
 , m_cudaGraphicsResource(nullptr)
 {
   CU_CHECK( cuModuleLoad(&m_moduleCompositor, "./rtigo3_core/compositor.ptx") ); // FIXME Only load this on the primary device!
+  //CU_CHECK( cuModuleLoadData(&m_moduleCompositor, "./rtigo3_core/compositor.ptx") ); // FIXME Use data from PTX.h
   CU_CHECK( cuModuleGetFunction(&m_functionCompositor, m_moduleCompositor, "compositor") );
 }
 
@@ -71,7 +74,7 @@ DeviceMultiGPULocalCopy::~DeviceMultiGPULocalCopy()
 
   if (m_ownsSharedBuffer)
   {
-    CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) ); 
+    CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) );
     CU_CHECK_NO_THROW( cuMemFree(m_d_compositorData) );
   }
 
@@ -95,7 +98,7 @@ void DeviceMultiGPULocalCopy::setState(DeviceState const& state)
 
 void DeviceMultiGPULocalCopy::activateContext()
 {
-  CU_CHECK( cuCtxSetCurrent(m_cudaContext) ); 
+  CU_CHECK( cuCtxSetCurrent(m_cudaContext) );
 }
 
 void DeviceMultiGPULocalCopy::synchronizeStream()
@@ -156,7 +159,7 @@ void DeviceMultiGPULocalCopy::render(const unsigned int iterationIndex, void** b
           glBufferData(GL_PIXEL_UNPACK_BUFFER, m_systemData.resolution.x * m_systemData.resolution.y * sizeof(float4), nullptr, GL_DYNAMIC_DRAW);
           glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-          CU_CHECK( cuGraphicsGLRegisterBuffer(&m_cudaGraphicsResource, m_pbo, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD) ); 
+          CU_CHECK( cuGraphicsGLRegisterBuffer(&m_cudaGraphicsResource, m_pbo, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD) );
           break;
       }
     }
@@ -206,10 +209,10 @@ void DeviceMultiGPULocalCopy::updateDisplayTexture()
       glBindTexture(GL_TEXTURE_2D, m_tex);
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_systemData.resolution.x, (GLsizei) m_systemData.resolution.y, 0, GL_RGBA, GL_FLOAT, m_bufferHost.data()); // RGBA32F from host buffer data.
       break;
-      
+
     case INTEROP_MODE_TEX:
       {
-        // Map the Texture object directly and copy the output buffer. 
+        // Map the Texture object directly and copy the output buffer.
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream )); // This is an implicit cuSynchronizeStream().
 
         CUarray dstArray = nullptr;
@@ -240,7 +243,7 @@ void DeviceMultiGPULocalCopy::updateDisplayTexture()
       {
         size_t size = 0;
         CUdeviceptr d_ptr;
-  
+
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream) ); // This is an implicit cuSynchronizeStream().
         CU_CHECK( cuGraphicsResourceGetMappedPointer(&d_ptr, &size, m_cudaGraphicsResource) ); // The pointer can change on every map!
         MY_ASSERT(m_systemData.resolution.x * m_systemData.resolution.y * sizeof(float4) <= size);
@@ -263,10 +266,10 @@ const void* DeviceMultiGPULocalCopy::getOutputBufferHost()
   activateContext();
 
   MY_ASSERT(!m_isDirtyOutputBuffer && m_ownsSharedBuffer); // Only allow this on the device which owns the shared peer-to-peer buffer and resized the host buffer to copy this to the host.
-  
+
   // Note that the caller takes care to sync the other devices before calling into here or this image might not be complete!
   CU_CHECK( cuMemcpyDtoHAsync(m_bufferHost.data(), m_systemData.outputBuffer, sizeof(float4) * m_systemData.resolution.x * m_systemData.resolution.y, m_cudaStream) );
-    
+
   synchronizeStream(); // Wait for the buffer to arrive on the host.
 
   return m_bufferHost.data();
@@ -279,7 +282,7 @@ void DeviceMultiGPULocalCopy::compositor(Device* other)
 
   MY_ASSERT(!m_isDirtyOutputBuffer && m_ownsSharedBuffer);
 
-  // The compositor sources the tileBuffer, which is only allocated on the primary device. 
+  // The compositor sources the tileBuffer, which is only allocated on the primary device.
   // The texelBuffer is a GPU local buffer on all devices and contains the accumulation.
   if (this == other)
   {
@@ -301,11 +304,11 @@ void DeviceMultiGPULocalCopy::compositor(Device* other)
   compositorData.tileShift    = m_systemData.tileShift;
   compositorData.launchWidth  = m_launchWidth;
   compositorData.deviceCount  = m_systemData.deviceCount;
-  compositorData.deviceIndex  = other->m_systemData.deviceIndex; // This is the only value which changes per device. 
+  compositorData.deviceIndex  = other->m_systemData.deviceIndex; // This is the only value which changes per device.
 
   // Need a synchronous copy here to not overwrite or delete the compositorData above.
   CU_CHECK( cuMemcpyHtoD(m_d_compositorData, &compositorData, sizeof(CompositorData)) );
- 
+
   void* args[1] = { &m_d_compositorData };
 
   const int blockDimX = std::min(compositorData.tileSize.x, 16);
@@ -314,7 +317,7 @@ void DeviceMultiGPULocalCopy::compositor(Device* other)
   const int gridDimX  = (m_launchWidth               + blockDimX - 1) / blockDimX;
   const int gridDimY  = (compositorData.resolution.y + blockDimY - 1) / blockDimY;
 
-  MY_ASSERT(gridDimX <= m_deviceAttribute.maxGridDimX && 
+  MY_ASSERT(gridDimX <= m_deviceAttribute.maxGridDimX &&
             gridDimY <= m_deviceAttribute.maxGridDimY);
 
   // Reduction kernel with launch dimension of height blocks with 32 threads.

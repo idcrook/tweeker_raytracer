@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@
 #else
 #include <dlfcn.h>
 #endif
+
+#include "PTX.h"
 
 #include <algorithm>
 #include <fstream>
@@ -207,6 +209,15 @@ static std::string readPTX(std::string const& filename)
   return ptx.str();
 }
 
+std::string readPTXFromInclude(unsigned char* ptx, size_t ptxBytes, const std::string& dummyFilename)
+{
+
+  std::cerr << "INFO: loading " << dummyFilename << std::endl;
+  std::string ptxString((char*)ptx, ptxBytes);
+
+  return ptxString;
+}
+
 
 Device::Device(const RendererStrategy strategy,
                const int ordinal,
@@ -238,10 +249,10 @@ Device::Device(const RendererStrategy strategy,
   // Create a CUDA Context and make it current to this thread.
   // PERF What is the best CU_CTX_SCHED_* setting here?
   // CU_CTX_MAP_HOST host to allow pinned memory.
-  CU_CHECK( cuCtxCreate(&m_cudaContext, CU_CTX_SCHED_SPIN | CU_CTX_MAP_HOST, ordinal) ); 
+  CU_CHECK( cuCtxCreate(&m_cudaContext, CU_CTX_SCHED_SPIN | CU_CTX_MAP_HOST, ordinal) );
 
   // PERF To make use of asynchronous copies. Currently not really anything happening in parallel due to synchronize calls.
-  CU_CHECK( cuStreamCreate(&m_cudaStream, CU_STREAM_NON_BLOCKING) ); 
+  CU_CHECK( cuStreamCreate(&m_cudaStream, CU_STREAM_NON_BLOCKING) );
 
 #if 1
   // UUID works under Windows and Linux.
@@ -281,7 +292,7 @@ Device::Device(const RendererStrategy strategy,
   m_systemData.envCDF_V            = nullptr;
   m_systemData.resolution          = make_int2(1, 1); // Deferred allocation after setResolution() when m_isDirtyOutputBuffer == true.
   m_systemData.tileSize            = make_int2(8, 8); // Default value for multi-GPU tiling. Must be power-of-two values. (8x8 covers either 8x4 or 4x8 internal 2D warp shapes.)
-  m_systemData.tileShift           = make_int2(3, 3); // The right-shift for the division by tileSize. 
+  m_systemData.tileShift           = make_int2(3, 3); // The right-shift for the division by tileSize.
   m_systemData.pathLengths         = make_int2(2, 5); // min, max
   m_systemData.deviceCount         = m_count; // The number of active devices.
   m_systemData.deviceIndex         = m_index; // This allows to distinguish multiple devices.
@@ -294,7 +305,7 @@ Device::Device(const RendererStrategy strategy,
   m_systemData.numCameras          = 0;
   m_systemData.numLights           = 0;
   m_systemData.numMaterials        = 0;
-      
+
   m_systemData.envWidth            = 0;
   m_systemData.envHeight           = 0;
   m_systemData.envIntegral         = 1.0f;
@@ -560,48 +571,59 @@ void Device::initPipeline()
   pco.pipelineLaunchParamsVariableName = "sysData";
 
   OptixModule moduleRaygeneration;
-  std::string ptx = readPTX("./rtigo3_core/raygeneration.ptx");
+  //std::string ptx = readPTX("./rtigo3_core/raygeneration.ptx");
+  std::string ptx = readPTXFromInclude(raygeneration_ptx, sizeof(raygeneration_ptx), "raygeneration.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleRaygeneration) );
 
   OptixModule moduleException;
-  ptx = readPTX("./rtigo3_core/exception.ptx");
+  //ptx = readPTX("./rtigo3_core/exception.ptx");
+  ptx = readPTXFromInclude(exception_ptx, sizeof(exception_ptx), "exception.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleException) );
-  
+
   OptixModule moduleMiss;
-  ptx = readPTX("./rtigo3_core/miss.ptx");
+  // ptx = readPTX("./rtigo3_core/miss.ptx");
+  ptx = readPTXFromInclude(miss_ptx, sizeof(miss_ptx), "miss.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleMiss) );
 
   OptixModule moduleClosesthit;
-  ptx = readPTX("./rtigo3_core/closesthit.ptx");
+  //ptx = readPTX("./rtigo3_core/closesthit.ptx");
+  ptx = readPTXFromInclude(closesthit_ptx, sizeof(closesthit_ptx), "closesthit.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleClosesthit) );
 
   OptixModule moduleAnyhit;
-  ptx = readPTX("./rtigo3_core/anyhit.ptx");
+  // ptx = readPTX("./rtigo3_core/anyhit.ptx");
+  ptx = readPTXFromInclude(anyhit_ptx, sizeof(anyhit_ptx), "anyhit.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleAnyhit) );
 
   OptixModule moduleLensShader;
-  ptx = readPTX("./rtigo3_core/lens_shader.ptx");
+  //ptx = readPTX("./rtigo3_core/lens_shader.ptx");
+  ptx = readPTXFromInclude(lens_shader_ptx, sizeof(lens_shader_ptx), "lens_shader.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleLensShader) );
 
   OptixModule moduleLightSample;
-  ptx = readPTX("./rtigo3_core/light_sample.ptx");
+  //ptx = readPTX("./rtigo3_core/light_sample.ptx");
+  ptx = readPTXFromInclude(light_sample_ptx, sizeof(light_sample_ptx), "light_sample.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleLightSample) );
-  
+
   OptixModule moduleDiffuse;
-  ptx = readPTX("./rtigo3_core/bxdf_diffuse.ptx");
+  //ptx = readPTX("./rtigo3_core/bxdf_diffuse.ptx");
+  ptx = readPTXFromInclude(bxdf_diffuse_ptx, sizeof(bxdf_diffuse_ptx), "bxdf_diffuse.ptx");
+
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleDiffuse) );
 
   OptixModule moduleSpecular;
-  ptx = readPTX("./rtigo3_core/bxdf_specular.ptx");
+  //ptx = readPTX("./rtigo3_core/bxdf_specular.ptx");
+  ptx = readPTXFromInclude(bxdf_specular_ptx, sizeof(bxdf_specular_ptx), "bxdf_specular.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleSpecular) );
 
   OptixModule moduleGgxSmith;
-  ptx = readPTX("./rtigo3_core/bxdf_ggx_smith.ptx");
+  //ptx = readPTX("./rtigo3_core/bxdf_ggx_smith.ptx");
+  ptx = readPTXFromInclude(bxdf_ggx_smith_ptx, sizeof(bxdf_ggx_smith_ptx), "bxdf_ggx_smith.ptx");
   OPTIX_CHECK( m_api.optixModuleCreateFromPTX(m_optixContext, &mco, &pco, ptx.c_str(), ptx.size(), nullptr, nullptr, &moduleGgxSmith) );
 
   std::vector<OptixProgramGroupDesc> programGroupDescriptions(NUM_PROGRAM_GROUP_IDS);
   memset(programGroupDescriptions.data(), 0, sizeof(OptixProgramGroupDesc) * programGroupDescriptions.size());
-  
+
   OptixProgramGroupDesc* pgd;
 
   // All of these first because they are SbtRecordHeader and put into a single CUDA memory block.
@@ -668,7 +690,7 @@ void Device::initPipeline()
   pgd->flags = OPTIX_PROGRAM_GROUP_FLAGS_NONE;
   pgd->callables.moduleDC            = moduleLensShader;
   pgd->callables.entryFunctionNameDC = "__direct_callable__fisheye";
-  
+
   pgd = &programGroupDescriptions[PGID_LENS_SPHERE];
   pgd->kind  = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
   pgd->flags = OPTIX_PROGRAM_GROUP_FLAGS_NONE;
@@ -780,7 +802,7 @@ void Device::initPipeline()
   memset(&pgo, 0, sizeof(OptixProgramGroupOptions) );
 
   std::vector<OptixProgramGroup> programGroups(programGroupDescriptions.size());
-  
+
   OPTIX_CHECK( m_api.optixProgramGroupCreate(m_optixContext, programGroupDescriptions.data(), (unsigned int) programGroupDescriptions.size(), &pgo, nullptr, nullptr, programGroups.data()) );
 
   OptixPipelineLinkOptions plo;
@@ -814,7 +836,7 @@ void Device::initPipeline()
     ssp.cssCC = std::max(ssp.cssCC, ss.cssCC);
     ssp.dssDC = std::max(ssp.dssDC, ss.dssDC);
   }
-  
+
   // Temporaries
   unsigned int cssCCTree           = ssp.cssCC; // Should be 0. No continuation callables in this pipeline. // maxCCDepth == 0
   unsigned int cssCHOrMSPlusCCTree = std::max(ssp.cssCH, ssp.cssMS) + cssCCTree;
@@ -923,7 +945,7 @@ void Device::initCameras(std::vector<CameraDefinition> const& cameras)
 {
   activateContext();
   synchronizeStream();
-    
+
   const int numCameras = static_cast<int>(cameras.size());
   MY_ASSERT(0 < numCameras); // There must be at least one camera defintion or the lens shaders won't work.
 
@@ -1126,7 +1148,7 @@ void Device::updateMaterial(const int idMaterial, MaterialGUI const& materialGUI
 
         if (!materialGUI.useCutoutTexture)
         {
-          // Only update the header to switch the program hit group. The SBT record data field doesn't change. 
+          // Only update the header to switch the program hit group. The SBT record data field doesn't change.
           memcpy(m_sbtRecordGeometryInstanceData[idx    ].header, m_sbtRecordHitRadiance.header, OPTIX_SBT_RECORD_HEADER_SIZE);
           memcpy(m_sbtRecordGeometryInstanceData[idx + 1].header, m_sbtRecordHitShadow.header,   OPTIX_SBT_RECORD_HEADER_SIZE);
         }
@@ -1136,7 +1158,7 @@ void Device::updateMaterial(const int idMaterial, MaterialGUI const& materialGUI
           memcpy(m_sbtRecordGeometryInstanceData[idx + 1].header, m_sbtRecordHitShadowCutout.header,   OPTIX_SBT_RECORD_HEADER_SIZE);
         }
         // PERF If the scene has many instances with few using the same material, this is faster. Otherwise the SBT can also be uploaded completely. See below.
-        // Only copy the two SBT entries which changed. 
+        // Only copy the two SBT entries which changed.
         CU_CHECK( cuMemcpyHtoDAsync(reinterpret_cast<CUdeviceptr>(&m_d_sbtRecordGeometryInstanceData[idx]), &m_sbtRecordGeometryInstanceData[idx], sizeof(SbtRecordGeometryInstanceData) * NUM_RAYTYPES, m_cudaStream) );
       }
     }
@@ -1149,18 +1171,18 @@ void Device::updateMaterial(const int idMaterial, MaterialGUI const& materialGUI
 
 static int2 calculateTileShift(const int2 tileSize)
 {
-  int xShift = 0; 
+  int xShift = 0;
   while (xShift < 32 && (tileSize.x & (1 << xShift)) == 0)
   {
     ++xShift;
   }
 
-  int yShift = 0; 
+  int yShift = 0;
   while (yShift < 32 && (tileSize.y & (1 << yShift)) == 0)
   {
     ++yShift;
   }
-  
+
   MY_ASSERT(xShift < 32 && yShift < 32); // Can only happen for zero input.
 
   return make_int2(xShift, yShift);
@@ -1210,7 +1232,7 @@ void Device::setState(DeviceState const& state)
     m_systemData.pathLengths = state.pathLengths;
     m_isDirtySystemData = true;
   }
-  
+
   if (m_systemData.sceneEpsilon != state.epsilonFactor * SCENE_EPSILON_SCALE)
   {
     m_systemData.sceneEpsilon = state.epsilonFactor * SCENE_EPSILON_SCALE;
@@ -1246,7 +1268,7 @@ static void multiplyMatrix(float* m, const float* a, const float* b)
   m[ 1] = a[0] * b[1] + a[1] * b[5] + a[ 2] * b[ 9]; // + a[3] * 0
   m[ 2] = a[0] * b[2] + a[1] * b[6] + a[ 2] * b[10]; // + a[3] * 0
   m[ 3] = a[0] * b[3] + a[1] * b[7] + a[ 2] * b[11] + a[3]; // * 1
-  
+
   m[ 4] = a[4] * b[0] + a[5] * b[4] + a[ 6] * b[ 8]; // + a[7] * 0
   m[ 5] = a[4] * b[1] + a[5] * b[5] + a[ 6] * b[ 9]; // + a[7] * 0
   m[ 6] = a[4] * b[2] + a[5] * b[6] + a[ 6] * b[10]; // + a[7] * 0
@@ -1284,13 +1306,13 @@ void Device::traverseNode(std::shared_ptr<sg::Node> node, float matrix[12], Inst
       int idMaterial = instance->getMaterial();
       if (0 <= idMaterial)
       {
-        data.idMaterial = idMaterial;  
+        data.idMaterial = idMaterial;
       }
 
       int idLight = instance->getLight();
       if (0 <= idLight)
       {
-        data.idLight = idLight;  
+        data.idLight = idLight;
       }
 
       traverseNode(instance->getChild(), trafo, data);
@@ -1318,7 +1340,7 @@ unsigned int Device::createGeometry(std::shared_ptr<sg::Triangles> geometry)
   {
     return idGeometry; // Yes, reuse the GAS traversable.
   }
-  
+
   std::vector<TriangleAttributes> const& attributes = geometry->getAttributes();
   std::vector<unsigned int>       const& indices    = geometry->getIndices();
 
@@ -1365,7 +1387,7 @@ unsigned int Device::createGeometry(std::shared_ptr<sg::Triangles> geometry)
   accelBuildOptions.operation  = OPTIX_BUILD_OPERATION_BUILD;
 
   OptixAccelBufferSizes accelBufferSizes;
-  
+
   OPTIX_CHECK( m_api.optixAccelComputeMemoryUsage(m_optixContext, &accelBuildOptions, &buildInput, 1, &accelBufferSizes) );
 
   CUdeviceptr d_temp;
@@ -1376,16 +1398,16 @@ unsigned int Device::createGeometry(std::shared_ptr<sg::Triangles> geometry)
   CU_CHECK( cuMemAlloc(&d_temp, accelBufferSizes.tempSizeInBytes) );
   CU_CHECK( cuMemAlloc(&d_blas, accelBufferSizes.outputSizeInBytes) );
 
-  OPTIX_CHECK( m_api.optixAccelBuild(m_optixContext, m_cudaStream, 
+  OPTIX_CHECK( m_api.optixAccelBuild(m_optixContext, m_cudaStream,
                                      &accelBuildOptions, &buildInput, 1,
                                      d_temp, accelBufferSizes.tempSizeInBytes,
-                                     d_blas, accelBufferSizes.outputSizeInBytes, 
+                                     d_blas, accelBufferSizes.outputSizeInBytes,
                                      &traversableHandle, nullptr, 0) );
 
   CU_CHECK( cuStreamSynchronize(m_cudaStream) );
 
   CU_CHECK( cuMemFree(d_temp) );
-  
+
   // Track the GeometryData to be able to set them in the SBT record GeometryInstanceData and free them on exit.
   // FIXME Move this to the top and use the fields directly.
   GeometryData geometryData;
@@ -1398,7 +1420,7 @@ unsigned int Device::createGeometry(std::shared_ptr<sg::Triangles> geometry)
   geometryData.d_blas        = d_blas;
 
   m_geometryData[idGeometry] = geometryData;
-    
+
   return idGeometry;
 }
 
@@ -1407,7 +1429,7 @@ void Device::createInstance( const OptixTraversableHandle traversable, float mat
   MY_ASSERT(0 <= data.idMaterial);
 
   OptixInstance instance;
-      
+
   const unsigned int id = static_cast<unsigned int>(m_instances.size());
   memcpy(instance.transform, matrix, sizeof(float) * 12);
   instance.instanceId        = id; // User defined instance index, queried with optixGetInstanceId().
@@ -1415,7 +1437,7 @@ void Device::createInstance( const OptixTraversableHandle traversable, float mat
   instance.sbtOffset         = id * NUM_RAYTYPES; // This controls the SBT instance offset! This must be set explicitly when each instance is using a separate BLAS.
   instance.flags             = OPTIX_INSTANCE_FLAG_NONE;
   instance.traversableHandle = traversable;
-    
+
   m_instances.push_back(instance); // OptiX instance data
   m_instanceData.push_back(data);  // SBT record data: idGeometry, idMaterial, idLight
 }
@@ -1425,7 +1447,7 @@ void Device::createTLAS()
 {
   // Construct the TLAS by attaching all flattened instances.
   CUdeviceptr d_instances;
-  
+
   const size_t instancesSizeInBytes = sizeof(OptixInstance) * m_instances.size();
 
   CU_CHECK( cuMemAlloc(&d_instances, instancesSizeInBytes) );
@@ -1443,13 +1465,13 @@ void Device::createTLAS()
 
   accelBuildOptions.buildFlags = OPTIX_BUILD_FLAG_NONE;
   accelBuildOptions.operation  = OPTIX_BUILD_OPERATION_BUILD;
-  
+
   OptixAccelBufferSizes tlasBufferSizes;
 
   OPTIX_CHECK( m_api.optixAccelComputeMemoryUsage(m_optixContext, &accelBuildOptions, &instanceInput, 1, &tlasBufferSizes ) );
 
   CUdeviceptr d_temp;
-  
+
   CU_CHECK( cuMemAlloc(&d_temp,   tlasBufferSizes.tempSizeInBytes) );
   CU_CHECK( cuMemAlloc(&m_d_tlas, tlasBufferSizes.outputSizeInBytes) );
 
@@ -1480,7 +1502,7 @@ void Device::createHitGroupRecords()
 
     if (m_materials[data.idMaterial].textureCutout == 0)
     {
-      // Only update the header to switch the program hit group. The SBT record data field doesn't change. 
+      // Only update the header to switch the program hit group. The SBT record data field doesn't change.
       memcpy(m_sbtRecordGeometryInstanceData[idx    ].header, m_sbtRecordHitRadiance.header, OPTIX_SBT_RECORD_HEADER_SIZE);
       memcpy(m_sbtRecordGeometryInstanceData[idx + 1].header, m_sbtRecordHitShadow.header,   OPTIX_SBT_RECORD_HEADER_SIZE);
     }

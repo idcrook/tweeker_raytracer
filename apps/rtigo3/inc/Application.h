@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,12 +45,11 @@
 #include "imgui.h"
 #define IMGUI_DEFINE_MATH_OPERATORS 1
 #include "imgui_internal.h"
-#include "imgui_impl_glfw_gl3.h"
+#include "bindings/imgui_impl_glfw.h"
+#include "bindings/imgui_impl_opengl3.h"
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
 
 #include "inc/Camera.h"
 #include "inc/Options.h"
@@ -65,6 +64,7 @@
 #include "shaders/material_definition.h"
 
 // This include gl.h and needs to be done after glew.h
+// Needs to be included after OpenGL headers!
 #include <GLFW/glfw3.h>
 
 // assimp include files.
@@ -84,6 +84,7 @@
 #define APP_ERROR_CREATE_WINDOW  -2
 #define APP_ERROR_GLFW_INIT      -3
 #define APP_ERROR_GLEW_INIT      -4
+#define APP_ERROR_OPENGL_LOADER_INIT      (APP_ERROR_GLEW_INIT)
 #define APP_ERROR_APP_INIT       -5
 
 
@@ -151,9 +152,9 @@ private:
   void createPictures();
 
   void appendInstance(std::shared_ptr<sg::Group>& group,
-                      std::shared_ptr<sg::Triangles> geometry, 
-                      dp::math::Mat44f const& matrix, 
-                      std::string const& reference, 
+                      std::shared_ptr<sg::Triangles> geometry,
+                      dp::math::Mat44f const& matrix,
+                      std::string const& reference,
                       unsigned int& idInstance);
 
   std::shared_ptr<sg::Group> createASSIMP(std::string const& filename);
@@ -189,7 +190,7 @@ private:
   std::string m_environment; // "envMap"
   int         m_interop;     // "interop"´// 0 = none all through host, 1 = register texture image, 2 = register pixel buffer
   bool        m_present;     // "present"
-  
+
   bool        m_presentNext;      // (derived)
   double      m_presentAtSecond;  // (derived)
   bool        m_previousComplete; // (derived) // Prevents spurious benchmark prints and image updates.
@@ -205,19 +206,19 @@ private:
   float      m_clockFactor;         // "clockFactor"
 
   std::string m_prefixScreenshot;   // "prefixScreenshot", allows to set a path and the prefix for the screenshot filename. spp, data, time and extension will be appended.
-  
+
   TonemapperGUI m_tonemapperGUI;    // "gamma", "whitePoint", "burnHighlights", "crushBlacks", "saturation", "brightness"
-  
+
   Camera m_camera;                  // "center", "camera"
 
   float m_mouseSpeedRatio;
-  
+
   Timer m_timer;
 
   std::map<std::string, KeywordScene> m_mapKeywordScene;
 
   std::unique_ptr<Rasterizer> m_rasterizer;
-  
+
   std::unique_ptr<Raytracer> m_raytracer; // This is a base class.
   DeviceState                m_state;
 
@@ -228,7 +229,7 @@ private:
   unsigned int m_idGeometry;
 
   std::shared_ptr<sg::Group> m_scene; // Root group node of the scene.
-  
+
   std::vector< std::shared_ptr<sg::Triangles> > m_geometries; // All geometries in the scene.
 
   // For the runtime generated objects, this allows to find geometries with the same type and construction parameters.
@@ -242,12 +243,11 @@ private:
   std::vector<MaterialGUI>      m_materialsGUI;
 
   // Map of local material names to indices in the m_materialsGUI vector.
-  std::map<std::string, int> m_mapMaterialReferences; 
+  std::map<std::string, int> m_mapMaterialReferences;
 
   std::map<std::string, Picture*> m_mapPictures;
 
-  std::vector<unsigned int> m_remappedMeshIndices; 
+  std::vector<unsigned int> m_remappedMeshIndices;
 };
 
 #endif // APPLICATION_H
-

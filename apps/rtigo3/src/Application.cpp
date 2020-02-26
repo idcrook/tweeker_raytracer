@@ -77,7 +77,7 @@ Application::Application(GLFWwindow* window, Options const& options)
   try
   {
     m_timer.restart();
-    
+
     // Initialize the top-level keywords of the scene description for faster search.
     m_mapKeywordScene["albedo"]          = KS_ALBEDO;
     m_mapKeywordScene["roughness"]       = KS_ROUGHNESS;
@@ -93,7 +93,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     m_mapKeywordScene["scale"]           = KS_SCALE;
     m_mapKeywordScene["translate"]       = KS_TRANSLATE;
     m_mapKeywordScene["model"]           = KS_MODEL;
-    
+
     const double timeConstructor = m_timer.getTime();
 
     m_width  = std::max(1, options.getWidth());
@@ -116,7 +116,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     m_tonemapperGUI.colorBalance[2] = 1.0f;
     m_tonemapperGUI.burnHighlights  = 1.0f;
     m_tonemapperGUI.crushBlacks     = 0.0f;
-    m_tonemapperGUI.saturation      = 1.0f; 
+    m_tonemapperGUI.saturation      = 1.0f;
     m_tonemapperGUI.brightness      = 1.0f;
 
     // System wide parameters are loaded from this file to keep the number of command line options small.
@@ -128,14 +128,23 @@ Application::Application(GLFWwindow* window, Options const& options)
       return; // m_isValid == false.
     }
 
-    // The user interface is part of the main application.
     // Setup ImGui binding.
+    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplGlfwGL3_Init(window, true);
+    //ImGuiIO &io = ImGui::GetIO();   (void)io;
+
+    //ImGui_ImplGlfwGL3_Init(window, true);
+    // imgui will send events to event handler callbacks installed for glfw (now even with install_callbacks=true)
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init();
 
     // This initializes the GLFW part including the font texture.
-    ImGui_ImplGlfwGL3_NewFrame();
+    //ImGui_ImplGlfwGL3_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
     ImGui::EndFrame();
+
 
 #if 0
     // Style the GUI colors to a neutral greyscale with plenty of transparency to concentrate on the image.
@@ -145,7 +154,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     const float r = 1.0f;
     const float g = 1.0f;
     const float b = 1.0f;
-  
+
     style.Colors[ImGuiCol_Text]                  = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
     style.Colors[ImGuiCol_TextDisabled]          = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
     style.Colors[ImGuiCol_WindowBg]              = ImVec4(r * 0.2f, g * 0.2f, b * 0.2f, 0.6f);
@@ -192,7 +201,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     style.Colors[ImGuiCol_NavHighlight]          = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
     style.Colors[ImGuiCol_NavWindowingHighlight] = ImVec4(r * 1.0f, g * 1.0f, b * 1.0f, 1.0f);
 #endif
-  
+
     const double timeGUI = m_timer.getTime();
 
     m_camera.setResolution(m_resolution.x, m_resolution.y);
@@ -200,10 +209,10 @@ Application::Application(GLFWwindow* window, Options const& options)
 
     // Initialize the OpenGL rasterizer.
     m_rasterizer = std::make_unique<Rasterizer>(m_width, m_height, m_interop);
-    
-    // Must set the resolution explicitly to be able to calculate 
+
+    // Must set the resolution explicitly to be able to calculate
     // the proper vertex attributes for display and the PBO size in case of interop.
-    m_rasterizer->setResolution(m_resolution.x, m_resolution.y); 
+    m_rasterizer->setResolution(m_resolution.x, m_resolution.y);
     m_rasterizer->setTonemapper(m_tonemapperGUI);
 
     const unsigned int tex = m_rasterizer->getTextureObject();
@@ -212,7 +221,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     const double timeRasterizer = m_timer.getTime();
 
     // Initialize the OptiX raytracer.
-    switch (m_strategy) // The strategy is limited to valid enums by the caller 
+    switch (m_strategy) // The strategy is limited to valid enums by the caller
     {
       case RS_INTERACTIVE_SINGLE_GPU:
         m_raytracer = std::make_unique<RaytracerSingleGPU>(m_devicesMask, m_miss, m_interop, tex, pbo);
@@ -257,12 +266,12 @@ Application::Application(GLFWwindow* window, Options const& options)
 #else
     // LUID only works under Windows because it requires the EXT_external_objects_win32 extension.
     // DEBUG With multicast enabled, both devices have the same LUID and the OpenGL node mask is the OR of the individual device node masks.
-    // Means the result of the deviceMatch here is depending on the CUDA device order. 
+    // Means the result of the deviceMatch here is depending on the CUDA device order.
     // Seems like multicast needs to handle CUDA - OpenGL interop differently.
     // With multicast enabled, uploading the PBO with glTexImage2D halves the framerate when presenting each image in both the single-GPU and multi-GPU P2P strategy.
     // Means there is an expensive PCI-E copy going on in that case.
     const unsigned char* luid = m_rasterizer->getLUID();
-    const int nodeMask        = m_rasterizer->getNodeMask(); 
+    const int nodeMask        = m_rasterizer->getNodeMask();
 
     // The cuDeviceGetLuid() takes char* and unsigned int though.
     deviceMatch = m_raytracer->matchLUID(reinterpret_cast<const char*>(luid), nodeMask);
@@ -299,9 +308,9 @@ Application::Application(GLFWwindow* window, Options const& options)
     m_scene = std::make_shared<sg::Group>(m_idGroup++); // Create the scene's root group first.
 
     createCameras();
-    createLights(); 
+    createLights();
     createPictures();
-    
+
     // Load the scene description file and generate the host side scene.
     const std::string filenameScene = options.getScene();
     if (!loadSceneDescription(filenameScene))
@@ -321,7 +330,7 @@ Application::Application(GLFWwindow* window, Options const& options)
     m_raytracer->initLights(m_lights);
     m_raytracer->initMaterials(m_materialsGUI);
     m_raytracer->initScene(m_scene, m_idGeometry); // m_idGeometry is the number of geometries in the scene.
-    
+
     const double timeRenderer = m_timer.getTime();
 
     // Print out hiow long the initialization of each module took.
@@ -351,8 +360,11 @@ Application::~Application()
   {
     delete it->second;
   }
-  
-  ImGui_ImplGlfwGL3_Shutdown();
+
+  // ImGui_ImplGlfwGL3_Shutdown();
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
+
   ImGui::DestroyContext();
 }
 
@@ -368,7 +380,7 @@ void Application::reshape(const int w, const int h)
   {
     m_width  = w;
     m_height = h;
-    
+
     m_rasterizer->reshape(m_width, m_height);
   }
 }
@@ -379,9 +391,9 @@ void Application::restartRendering()
 
   m_presentNext      = true;
   m_presentAtSecond  = 1.0;
-  
+
   m_previousComplete = false;
-  
+
   m_timer.restart();
 }
 
@@ -405,7 +417,7 @@ bool Application::render()
     }
 
     const unsigned int iterationIndex = m_raytracer->render();
-    
+
     // When the renderer has completed all iterations, change the GUI title bar to green.
     const bool complete = ((unsigned int)(m_samplesSqrt * m_samplesSqrt) <= iterationIndex);
 
@@ -415,13 +427,13 @@ bool Application::render()
 
       flush = !m_previousComplete && complete; // Completion status changed to true.
     }
-    
+
     m_previousComplete = complete;
-    
+
     // When benchmark is enabled, exit the application when the requested samples per pixel have ben rendered.
     // Actually this render() function is not called when m_mode == 1 but keep the finish here to exit on exceptions.
     finish = ((m_mode == 1) && complete);
-    
+
     // Only update the texture when a restart happened, one second passed to reduce required bandwidth, or the rendering is newly complete.
     if (m_presentNext || flush)
     {
@@ -444,12 +456,12 @@ bool Application::render()
     {
       m_presentAtSecond = ceil(seconds);
       m_presentNext     = true; // Present at least every second.
-      
+
       if (flush || finish) // Only print the performance when the samples per pixels are reached.
       {
         const double fps = double(iterationIndex) / seconds;
 
-        std::ostringstream stream; 
+        std::ostringstream stream;
         stream.precision(3); // Precision is # digits in fraction part.
         stream << std::fixed << iterationIndex << " / " << seconds << " = " << fps << " fps";
         std::cout << stream.str() << std::endl;
@@ -481,7 +493,7 @@ void Application::benchmark()
   try
   {
     const unsigned int spp = (unsigned int)(m_samplesSqrt * m_samplesSqrt);
-    unsigned int iterationIndex = 0; 
+    unsigned int iterationIndex = 0;
 
     m_timer.restart();
 
@@ -489,7 +501,7 @@ void Application::benchmark()
     {
       iterationIndex = m_raytracer->render();
     }
-    
+
     m_raytracer->synchronize(); // Wait until any asynchronous operations have finished.
 
     const double seconds = m_timer.getTime();
@@ -526,18 +538,25 @@ void Application::display()
 
 void Application::guiNewFrame()
 {
-  ImGui_ImplGlfwGL3_NewFrame();
+  //ImGui_ImplGlfwGL3_NewFrame();
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplGlfw_NewFrame();
+  ImGui::NewFrame();
+
 }
 
 void Application::guiReferenceManual()
 {
-  ImGui::ShowTestWindow();
+  //ImGui::ShowTestWindow();
+  ImGui::ShowDemoWindow();
 }
 
 void Application::guiRender()
 {
   ImGui::Render();
-  ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+  //ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 }
 
 void Application::createCameras()
@@ -548,21 +567,21 @@ void Application::createCameras()
 
   m_cameras.push_back(camera);
 }
-  
+
 
 void Application::createLights()
 {
   LightDefinition light;
 
-  // Unused in environment lights. 
+  // Unused in environment lights.
   light.position = make_float3(0.0f, 0.0f, 0.0f);
   light.vecU     = make_float3(1.0f, 0.0f, 0.0f);
   light.vecV     = make_float3(0.0f, 1.0f, 0.0f);
   light.normal   = make_float3(0.0f, 0.0f, 1.0f);
   light.area     = 1.0f;
   light.emission = make_float3(1.0f, 1.0f, 1.0f);
-  
-  // The environment light is expected in sysData.lightDefinitions[0], but since there is only one, 
+
+  // The environment light is expected in sysData.lightDefinitions[0], but since there is only one,
   // the sysData struct contains the data for the spherical HDR environment light when enabled.
   // All other lights are indexed by their position inside the array.
   switch (m_miss)
@@ -593,7 +612,7 @@ void Application::createLights()
       light.type     = LIGHT_PARALLELOGRAM;              // A geometric area light with diffuse emission distribution function.
       light.position = make_float3(-0.5f, 1.95f, -0.5f); // Corner position.
       light.vecU     = make_float3(1.0f, 0.0f, 0.0f);    // To the right.
-      light.vecV     = make_float3(0.0f, 0.0f, 1.0f);    // To the front. 
+      light.vecV     = make_float3(0.0f, 0.0f, 1.0f);    // To the front.
       normal         = cross(light.vecU, light.vecV);   // Length of the cross product is the area.
       light.area     = length(normal);                  // Calculate the world space area of that rectangle, unit is [m^2]
       light.normal   = normal / light.area;             // Normalized normal
@@ -605,7 +624,7 @@ void Application::createLights()
       light.type     = LIGHT_PARALLELOGRAM;             // A geometric area light with diffuse emission distribution function.
       light.position = make_float3(-2.0f, 4.0f, -2.0f); // Corner position.
       light.vecU     = make_float3(4.0f, 0.0f, 0.0f);   // To the right.
-      light.vecV     = make_float3(0.0f, 0.0f, 4.0f);   // To the front. 
+      light.vecV     = make_float3(0.0f, 0.0f, 4.0f);   // To the front.
       normal         = cross(light.vecU, light.vecV);   // Length of the cross product is the area.
       light.area     = length(normal);                  // Calculate the world space area of that rectangle, unit is [m^2]
       light.normal   = normal / light.area;             // Normalized normal
@@ -613,7 +632,7 @@ void Application::createLights()
       m_lights.push_back(light);
       break;
   }
-  
+
   if (0 < m_light) // If there is an area light in the scene
   {
 
@@ -641,7 +660,7 @@ void Application::createLights()
 
     // Create the Triangles for this parallelogram light.
     m_mapGeometries[reference] = m_idGeometry;
-    
+
     std::shared_ptr<sg::Triangles> geometry(new sg::Triangles(m_idGeometry++));
     geometry->createParallelogram(light.position, light.vecU, light.vecV, light.normal);
 
@@ -659,7 +678,7 @@ void Application::createLights()
 
 void Application::createPictures()
 {
-  // DAR HACK Load some hardcoded Pictures referenced by the materials.   
+  // DAR HACK Load some hardcoded Pictures referenced by the materials.
   unsigned int flags = IMAGE_FLAG_2D; // Load only the LOD into memory.
 
   Picture* picture = new Picture();
@@ -777,7 +796,8 @@ void Application::guiWindow()
 
   bool refresh = false;
 
-  ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+  //ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiSetCond_FirstUseEver);
+  ImGui::SetNextWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);  // changed in imgui v1.51
 
   ImGuiWindowFlags window_flags = 0;
   if (!ImGui::Begin("rtigo3", nullptr, window_flags)) // No bool flag to omit the close button.
@@ -920,12 +940,12 @@ void Application::guiWindow()
         if (ImGui::Checkbox("Thin-Walled", &materialGUI.thinwalled)) // Set this to true when using cutout opacity!
         {
           changed = true;
-        }	
+        }
         // Only show material parameters for the BxDFs which are affected by IOR and volume absorption.
         if (materialGUI.indexBSDF == INDEX_BSDF_SPECULAR ||
             materialGUI.indexBSDF == INDEX_BSDF_GGX_SMITH)
         {
-          if (ImGui::ColorEdit3("Absorption", (float*) &materialGUI.absorptionColor)) 
+          if (ImGui::ColorEdit3("Absorption", (float*) &materialGUI.absorptionColor))
           {
             changed = true;
           }
@@ -1005,7 +1025,7 @@ void Application::guiRenderingIndicator(const bool isRendering)
   float r = 0.462745f;
   float g = 0.72549f;
   float b = 0.0f;
-  
+
   if (isRendering)
   {
     // Neutral grey while rendering.
@@ -1045,7 +1065,7 @@ bool Application::loadSystemDescription(std::string const& filename)
       return false;
     }
 
-    if (tokenType == PTT_ID) 
+    if (tokenType == PTT_ID)
     {
       if (token == "strategy")
       {
@@ -1101,7 +1121,7 @@ bool Application::loadSystemDescription(std::string const& filename)
         tokenType = parser.getNextToken(token);
         MY_ASSERT(tokenType == PTT_VAL);
         m_tileSize.y = std::max(1, atoi(token.c_str()));
-       
+
         // Make sure the values are power-of-two.
         if (m_tileSize.x & (m_tileSize.x - 1))
         {
@@ -1325,22 +1345,22 @@ bool Application::saveSystemDescription()
 }
 
 void Application::appendInstance(std::shared_ptr<sg::Group>& group,
-                                 std::shared_ptr<sg::Triangles> geometry, 
-                                 dp::math::Mat44f const& matrix, 
-                                 std::string const& reference, 
+                                 std::shared_ptr<sg::Triangles> geometry,
+                                 dp::math::Mat44f const& matrix,
+                                 std::string const& reference,
                                  unsigned int& idInstance)
 {
   // nvpro-pipeline matrices are row-major multiplied from the right, means the translation is in the last row. Transpose!
   const float trafo[12] =
   {
-    matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0], 
-    matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1], 
+    matrix[0][0], matrix[1][0], matrix[2][0], matrix[3][0],
+    matrix[0][1], matrix[1][1], matrix[2][1], matrix[3][1],
     matrix[0][2], matrix[1][2], matrix[2][2], matrix[3][2]
   };
 
-  MY_ASSERT(matrix[0][3] == 0.0f && 
-            matrix[1][3] == 0.0f && 
-            matrix[2][3] == 0.0f && 
+  MY_ASSERT(matrix[0][3] == 0.0f &&
+            matrix[1][3] == 0.0f &&
+            matrix[2][3] == 0.0f &&
             matrix[3][3] == 1.0f);
 
   std::shared_ptr<sg::Instance> instance(new sg::Instance(idInstance++));
@@ -1362,7 +1382,7 @@ void Application::appendInstance(std::shared_ptr<sg::Group>& group,
     {
       indexMaterial = itmd->second;
     }
-    else 
+    else
     {
       std::cerr << "ERROR: loadSceneDescription() No default material found" << std::endl;
     }
@@ -1408,7 +1428,7 @@ bool Application::loadSceneDescription(std::string const& filename)
   float  curAbsorptionScale = 0.0f; // 0.0f means off.
   float  curIOR             = 1.5f;
   bool   curThinwalled      = false;
-  
+
   // FIXME Add a mechanism to specify albedo textures per material and make that resetable or add a push/pop mechanism for materials.
   // E.g. special case filename "none" which translates to empty filename, which switches off albedo textures.
   // Get rid of the single hardcoded texture and the toggle.
@@ -1422,7 +1442,7 @@ bool Application::loadSceneDescription(std::string const& filename)
       return false;
     }
 
-    if (tokenType == PTT_ID) 
+    if (tokenType == PTT_ID)
     {
       std::map<std::string, KeywordScene>::const_iterator it = m_mapKeywordScene.find(token);
       if (it == m_mapKeywordScene.end())
@@ -1600,13 +1620,13 @@ bool Application::loadSceneDescription(std::string const& filename)
 
             dp::math::Quatf rotation(axis, angle);
             curOrientation *= rotation;
-        
-            dp::math::Mat44f matrix(rotation, dp::math::Vec3f(0.0f, 0.0f, 0.0f)); // Zero translation to get a Mat44f back. 
+
+            dp::math::Mat44f matrix(rotation, dp::math::Vec3f(0.0f, 0.0f, 0.0f)); // Zero translation to get a Mat44f back.
             curMatrix *= matrix; // DEBUG No need for the local matrix variable.
-        
+
             // Inverse. Opposite order of matrix multiplications to make M * M^-1 = I.
             dp::math::Quatf rotationInv(axis, -angle);
-            dp::math::Mat44f matrixInv(rotationInv, dp::math::Vec3f(0.0f, 0.0f, 0.0f)); // Zero translation to get a Mat44f back. 
+            dp::math::Mat44f matrixInv(rotationInv, dp::math::Vec3f(0.0f, 0.0f, 0.0f)); // Zero translation to get a Mat44f back.
             curInverse = matrixInv * curInverse; // DEBUG No need for the local matrixInv variable.
           }
           break;
@@ -1639,7 +1659,7 @@ bool Application::loadSceneDescription(std::string const& filename)
         case KS_TRANSLATE:
           {
             dp::math::Mat44f translation(dp::math::cIdentity44f);
-        
+
             // Translation is in the third row in dp::math::Mat44f.
             tokenType = parser.getNextToken(token);
             MY_ASSERT(tokenType == PTT_VAL);
@@ -1664,7 +1684,7 @@ bool Application::loadSceneDescription(std::string const& filename)
         case KS_MODEL:
           tokenType = parser.getNextToken(token);
           MY_ASSERT(tokenType == PTT_ID);
-       
+
           if (token == "plane")
           {
             tokenType = parser.getNextToken(token);
@@ -1681,7 +1701,7 @@ bool Application::loadSceneDescription(std::string const& filename)
 
             std::string nameMaterialReference;
             tokenType = parser.getNextToken(nameMaterialReference);
-                    
+
             std::ostringstream keyGeometry;
             keyGeometry << "plane_" << tessU << "_" << tessV << "_" << upAxis;
 
@@ -1708,7 +1728,7 @@ bool Application::loadSceneDescription(std::string const& filename)
           {
             std::string nameMaterialReference;
             tokenType = parser.getNextToken(nameMaterialReference);
-          
+
             // FIXME Implement tessellation. Must be a single value to get even distributions across edges.
             std::string keyGeometry("box_1_1");
 
@@ -1748,7 +1768,7 @@ bool Application::loadSceneDescription(std::string const& filename)
 
             std::string nameMaterialReference;
             tokenType = parser.getNextToken(nameMaterialReference);
-                    
+
             std::ostringstream keyGeometry;
             keyGeometry << "sphere_" << tessU << "_" << tessV << "_" << theta;
 
@@ -1791,7 +1811,7 @@ bool Application::loadSceneDescription(std::string const& filename)
 
             std::string nameMaterialReference;
             tokenType = parser.getNextToken(nameMaterialReference);
-                    
+
             std::ostringstream keyGeometry;
             keyGeometry << "torus_" << tessU << "_" << tessV << "_" << innerRadius << "_" << outerRadius;
 
@@ -1826,14 +1846,14 @@ bool Application::loadSceneDescription(std::string const& filename)
             // nvpro-pipeline matrices are row-major multiplied from the right, means the translation is in the last row. Transpose!
             const float trafo[12] =
             {
-              curMatrix[0][0], curMatrix[1][0], curMatrix[2][0], curMatrix[3][0], 
-              curMatrix[0][1], curMatrix[1][1], curMatrix[2][1], curMatrix[3][1], 
+              curMatrix[0][0], curMatrix[1][0], curMatrix[2][0], curMatrix[3][0],
+              curMatrix[0][1], curMatrix[1][1], curMatrix[2][1], curMatrix[3][1],
               curMatrix[0][2], curMatrix[1][2], curMatrix[2][2], curMatrix[3][2]
             };
 
-            MY_ASSERT(curMatrix[0][3] == 0.0f && 
-                      curMatrix[1][3] == 0.0f && 
-                      curMatrix[2][3] == 0.0f && 
+            MY_ASSERT(curMatrix[0][3] == 0.0f &&
+                      curMatrix[1][3] == 0.0f &&
+                      curMatrix[2][3] == 0.0f &&
                       curMatrix[3][3] == 1.0f);
 
             std::shared_ptr<sg::Instance> instance(new sg::Instance(m_idInstance++));
@@ -1955,7 +1975,7 @@ std::string Application::getDateTime()
   {
     oss << '0';
   }
-  oss << time.wMilliseconds; 
+  oss << time.wMilliseconds;
 #elif defined(__linux__)
   oss << ts->tm_year;
   if (ts->tm_mon < 10)
@@ -2115,7 +2135,7 @@ static void updateAABB(float3& minimum, float3& maximum, float3 const& v)
 //
 //    tangent = bitangent ^ normal;
 //    dp::math::normalize(tangent);
-//    
+//
 //    attributes[i].tangent = tangent;
 //
 //#if USE_BITANGENT
@@ -2148,7 +2168,7 @@ void Application::calculateTangents(std::vector<TriangleAttributes>& attributes,
 
   // Get the longest extend and use that as general tangent direction.
   const float3 extents = aabbHi - aabbLo;
-  
+
   float f = extents.x;
   int maxComponent = 0;
 
@@ -2173,7 +2193,7 @@ void Application::calculateTangents(std::vector<TriangleAttributes>& attributes,
     bidirection = make_float3(0.0f, 1.0f, 0.0f);
     break;
   case 1: // y-axis // DEBUG It might make sense to keep these directions aligned to the global coordinate system. Use the same coordinates as for z-axis then.
-    direction   = make_float3(0.0f, 1.0f, 0.0f); 
+    direction   = make_float3(0.0f, 1.0f, 0.0f);
     bidirection = make_float3(0.0f, 0.0f, -1.0f);
     break;
   case 2: // z-axis
@@ -2211,13 +2231,13 @@ void Application::calculateTangents(std::vector<TriangleAttributes>& attributes,
 bool Application::screenshot(const bool tonemap)
 {
   ILboolean hasImage = false;
-  
+
   const int spp = m_samplesSqrt * m_samplesSqrt; // Add the samples per pixel to the filename for quality comparisons.
 
   std::ostringstream path;
-   
+
   path << m_prefixScreenshot << "_" << spp << "spp_" << getDateTime();
-  
+
   unsigned int imageID;
 
   ilGenImages(1, (ILuint *) &imageID);
@@ -2229,7 +2249,7 @@ bool Application::screenshot(const bool tonemap)
   ilDisable(IL_ORIGIN_SET);
 
   const float4* bufferHost = reinterpret_cast<const float4*>(m_raytracer->getOutputBufferHost());
-  
+
   if (tonemap)
   {
     // Store a tonemapped RGB8 *.png image
@@ -2256,7 +2276,7 @@ bool Application::screenshot(const bool tonemap)
           float3 hdrColor = make_float3(bufferHost[idx]);
           float3 ldrColor = invWhitePoint * colorBalance * hdrColor;
           ldrColor       *= ((ldrColor * burnHighlights) + 1.0f) / (ldrColor + 1.0f);
-          
+
           float luminance = dot(ldrColor, make_float3(0.3f, 0.59f, 0.11f));
           ldrColor = lerp(make_float3(luminance), ldrColor, saturation); // This can generate negative values for saturation > 1.0f!
           ldrColor = fmaxf(make_float3(0.0f), ldrColor); // Prevent negative values.
@@ -2290,10 +2310,10 @@ bool Application::screenshot(const bool tonemap)
   if (hasImage)
   {
     ilEnable(IL_FILE_OVERWRITE); // By default, always overwrite
-    
+
     std::string filename = path.str();
     convertPath(filename);
-	
+
     if (ilSaveImage((const ILstring) filename.c_str()))
     {
       ilDeleteImages(1, &imageID);
@@ -2304,7 +2324,7 @@ bool Application::screenshot(const bool tonemap)
   }
 
   // There was an error when reaching this code.
-  ILenum error = ilGetError(); // DEBUG 
+  ILenum error = ilGetError(); // DEBUG
   std::cerr << "ERROR: screenshot() failed with IL error " << error << std::endl;
 
   while (ilGetError() != IL_NO_ERROR) // Clean up errors.
@@ -2358,6 +2378,3 @@ void Application::convertPath(char* path)
   }
 #endif
 }
-
-
-

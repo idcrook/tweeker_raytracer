@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,12 @@
 
 #include "inc/CheckMacros.h"
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
+// #include <GL/glew.h>
+// #if defined( _WIN32 )
+// #include <GL/wglew.h>
+// #endif
 
 // CUDA Driver API version of the OpenGL interop header.
 #include <cudaGL.h>
@@ -65,7 +67,7 @@ DeviceMultiGPUPeerAccess::~DeviceMultiGPUPeerAccess()
 
   if (m_ownsSharedBuffer) // This destruction order requires that all other devices cannot touch this shared buffer anymore.
   {
-    CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) ); 
+    CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) );
   }
 }
 
@@ -86,7 +88,7 @@ void DeviceMultiGPUPeerAccess::setState(DeviceState const& state)
 
 void DeviceMultiGPUPeerAccess::activateContext()
 {
-  CU_CHECK( cuCtxSetCurrent(m_cudaContext) ); 
+  CU_CHECK( cuCtxSetCurrent(m_cudaContext) );
 }
 
 void DeviceMultiGPUPeerAccess::synchronizeStream()
@@ -107,7 +109,7 @@ void DeviceMultiGPUPeerAccess::render(const unsigned int iterationIndex, void** 
     MY_ASSERT(buffer != nullptr);
     if (*buffer == nullptr) // The buffer is nullptr in for the device which is should allocate the shared peer to peer buffer. That is called first!
     {
-      // Only allocate the host buffer on one device. 
+      // Only allocate the host buffer on one device.
       // Only needed for the screenshot functionality and the texture resize below.
       m_bufferHost.resize(m_systemData.resolution.x * m_systemData.resolution.y);
 
@@ -146,7 +148,7 @@ void DeviceMultiGPUPeerAccess::render(const unsigned int iterationIndex, void** 
           glBufferData(GL_PIXEL_UNPACK_BUFFER, m_systemData.resolution.x * m_systemData.resolution.y * sizeof(float4), nullptr, GL_DYNAMIC_DRAW);
           glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
 
-          CU_CHECK( cuGraphicsGLRegisterBuffer(&m_cudaGraphicsResource, m_pbo, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD) ); 
+          CU_CHECK( cuGraphicsGLRegisterBuffer(&m_cudaGraphicsResource, m_pbo, CU_GRAPHICS_REGISTER_FLAGS_WRITE_DISCARD) );
           break;
       }
     }
@@ -197,10 +199,10 @@ void DeviceMultiGPUPeerAccess::updateDisplayTexture()
       glBindTexture(GL_TEXTURE_2D, m_tex);
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_systemData.resolution.x, (GLsizei) m_systemData.resolution.y, 0, GL_RGBA, GL_FLOAT, m_bufferHost.data()); // RGBA32F from host buffer data.
       break;
-      
+
     case INTEROP_MODE_TEX:
       {
-        // Map the Texture object directly and copy the output buffer. 
+        // Map the Texture object directly and copy the output buffer.
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream )); // This is an implicit cuSynchronizeStream().
 
         CUarray dstArray = nullptr;
@@ -231,7 +233,7 @@ void DeviceMultiGPUPeerAccess::updateDisplayTexture()
       {
         size_t size = 0;
         CUdeviceptr d_ptr;
-  
+
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream) ); // This is an implicit cuSynchronizeStream().
         CU_CHECK( cuGraphicsResourceGetMappedPointer(&d_ptr, &size, m_cudaGraphicsResource) ); // The pointer can change on every map!
         MY_ASSERT(m_systemData.resolution.x * m_systemData.resolution.y * sizeof(float4) <= size);
@@ -253,10 +255,10 @@ const void* DeviceMultiGPUPeerAccess::getOutputBufferHost()
   activateContext();
 
   MY_ASSERT(!m_isDirtyOutputBuffer && m_ownsSharedBuffer); // Only allow this on the device which owns the shared peer-to-peer buffer and resized the host buffer to copy this to the host.
-  
+
   // Note that the caller takes care to sync the other devices before calling into here or this image might not be complete!
   CU_CHECK( cuMemcpyDtoHAsync(m_bufferHost.data(), m_systemData.outputBuffer, sizeof(float4) * m_systemData.resolution.x * m_systemData.resolution.y, m_cudaStream) );
-    
+
   synchronizeStream(); // Wait for the buffer to arrive on the host. Context is created with CU_CTX_SCHED_SPIN.
 
   return m_bufferHost.data();

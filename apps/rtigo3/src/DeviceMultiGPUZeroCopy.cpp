@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,12 @@
 
 #include "inc/CheckMacros.h"
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
+// #include <GL/glew.h>
+// #if defined( _WIN32 )
+// #include <GL/wglew.h>
+// #endif
 
 DeviceMultiGPUZeroCopy::DeviceMultiGPUZeroCopy(const RendererStrategy strategy,
                                                const int ordinal,
@@ -58,7 +60,7 @@ DeviceMultiGPUZeroCopy::~DeviceMultiGPUZeroCopy()
 
   if (m_ownsSharedBuffer) // This destruction order requires that all other devices cannot touch this shared buffer anymore.
   {
-    CU_CHECK_NO_THROW( cuCtxSetCurrent(m_cudaContext) ); 
+    CU_CHECK_NO_THROW( cuCtxSetCurrent(m_cudaContext) );
 
     CU_CHECK_NO_THROW( cuMemFreeHost(reinterpret_cast<void*>(m_systemData.outputBuffer)) );
   }
@@ -81,7 +83,7 @@ void DeviceMultiGPUZeroCopy::setState(DeviceState const& state)
 
 void DeviceMultiGPUZeroCopy::activateContext()
 {
-  CU_CHECK( cuCtxSetCurrent(m_cudaContext) ); 
+  CU_CHECK( cuCtxSetCurrent(m_cudaContext) );
 }
 
 void DeviceMultiGPUZeroCopy::synchronizeStream()
@@ -103,17 +105,17 @@ void DeviceMultiGPUZeroCopy::render(const unsigned int iterationIndex, void** bu
       // Allocate zero-copy pinned memory on the host.
       CU_CHECK( cuMemFreeHost(reinterpret_cast<void*>(m_systemData.outputBuffer)) );
       CU_CHECK( cuMemHostAlloc(reinterpret_cast<void**>(&m_systemData.outputBuffer), sizeof(float4) * m_systemData.resolution.x * m_systemData.resolution.y, CU_MEMHOSTALLOC_PORTABLE | CU_MEMHOSTALLOC_DEVICEMAP) );
-      
+
       *buffer = reinterpret_cast<void*>(m_systemData.outputBuffer); // Fill the shared buffer pointer.
 
       m_ownsSharedBuffer = true; // This device will destruct it.
     }
     else
     {
-      // Use the same zero copy pinned memory buffer for all devices. 
-      // m_systemData.outputBuffer = reinterpret_cast<CUdeviceptr>(*buffer); 
+      // Use the same zero copy pinned memory buffer for all devices.
+      // m_systemData.outputBuffer = reinterpret_cast<CUdeviceptr>(*buffer);
       // This call results in the same pointer because of CU_MEMHOSTALLOC_PORTABLE.
-      CU_CHECK( cuMemHostGetDevicePointer(&m_systemData.outputBuffer, *buffer, 0) ); 
+      CU_CHECK( cuMemHostGetDevicePointer(&m_systemData.outputBuffer, *buffer, 0) );
     }
 
     m_isDirtyOutputBuffer = false; // Buffer is allocated with new size,
@@ -143,8 +145,8 @@ void DeviceMultiGPUZeroCopy::updateDisplayTexture()
 {
   // All other devices have been synced by the RaytracerMultiGPUZeroCopy caller.
   activateContext();
-  synchronizeStream(); // Wait for the buffer to arrive on the host. 
-  
+  synchronizeStream(); // Wait for the buffer to arrive on the host.
+
   MY_ASSERT(!m_isDirtyOutputBuffer && m_ownsSharedBuffer && m_tex != 0);
 
   glActiveTexture(GL_TEXTURE0);
@@ -158,7 +160,7 @@ const void* DeviceMultiGPUZeroCopy::getOutputBufferHost()
 {
   // All other devices have been synced by the RaytracerMultiGPUZeroCopy caller.
   activateContext();
-  synchronizeStream(); // Wait for the buffer to arrive on the host. 
+  synchronizeStream(); // Wait for the buffer to arrive on the host.
 
   MY_ASSERT(!m_isDirtyOutputBuffer && m_ownsSharedBuffer);
 

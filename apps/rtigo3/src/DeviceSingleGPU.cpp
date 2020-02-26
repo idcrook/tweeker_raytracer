@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,12 +30,15 @@
 
 #include "inc/CheckMacros.h"
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
 
-// CUDA Driver API version of the OpenGL interop header. 
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
+// #include <GL/glew.h>
+// #if defined( _WIN32 )
+// #include <GL/wglew.h>
+// #endif
+
+// CUDA Driver API version of the OpenGL interop header.
 #include <cudaGL.h>
 
 #include <string.h>
@@ -74,10 +77,10 @@ DeviceSingleGPU::~DeviceSingleGPU()
   switch (m_interop)
   {
     case INTEROP_MODE_OFF:
-      CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) ); 
+      CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) );
       break;
     case INTEROP_MODE_TEX:
-      CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) ); 
+      CU_CHECK_NO_THROW( cuMemFree(m_systemData.outputBuffer) );
       CU_CHECK_NO_THROW( cuGraphicsUnregisterResource(m_cudaGraphicsResource) );
       break;
     case INTEROP_MODE_PBO:
@@ -90,7 +93,7 @@ DeviceSingleGPU::~DeviceSingleGPU()
 void DeviceSingleGPU::activateContext()
 {
   // Persistent CUDA context in single GPU renderers! No need to set it current after initial creation.
-  // CU_CHECK( cuCtxSetCurrent(m_cudaContext) ); 
+  // CU_CHECK( cuCtxSetCurrent(m_cudaContext) );
 }
 
 void DeviceSingleGPU::synchronizeStream()
@@ -107,7 +110,7 @@ void DeviceSingleGPU::render(const unsigned int iterationIndex, void** buffer)
   if (m_isDirtyOutputBuffer)
   {
     // Required for getOutputBufferHost() which is still called in the screenshot() function.
-    m_bufferHost.resize(m_systemData.resolution.x * m_systemData.resolution.y); 
+    m_bufferHost.resize(m_systemData.resolution.x * m_systemData.resolution.y);
 
     switch (m_interop)
     {
@@ -166,12 +169,12 @@ void DeviceSingleGPU::render(const unsigned int iterationIndex, void** buffer)
         size_t size;
 
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream) ); // This is an implicit cuSynchronizeStream().
-    
+
         CU_CHECK( cuGraphicsResourceGetMappedPointer(&m_systemData.outputBuffer, &size, m_cudaGraphicsResource) ); // The pointer can change on every map!
         CU_CHECK( cuMemcpyHtoDAsync(reinterpret_cast<CUdeviceptr>(&m_d_systemData->outputBuffer), &m_systemData.outputBuffer, sizeof(void*), m_cudaStream) ); // This will render directly into the PBO.
 
         OPTIX_CHECK( m_api.optixLaunch(m_pipeline, m_cudaStream, reinterpret_cast<CUdeviceptr>(m_d_systemData), sizeof(SystemData), &m_sbt, m_systemData.resolution.x, m_systemData.resolution.y, /* depth */ 1) );
-      
+
         CU_CHECK( cuGraphicsUnmapResources(1, &m_cudaGraphicsResource, m_cudaStream) ); // This is an implicit cuSynchronizeStream().
       }
       break;
@@ -181,7 +184,7 @@ void DeviceSingleGPU::render(const unsigned int iterationIndex, void** buffer)
 void DeviceSingleGPU::updateDisplayTexture()
 {
   // activateContext();
-  
+
   MY_ASSERT(!m_isDirtyOutputBuffer && m_tex != 0);
 
   switch (m_interop)
@@ -195,10 +198,10 @@ void DeviceSingleGPU::updateDisplayTexture()
       glBindTexture(GL_TEXTURE_2D, m_tex);
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (GLsizei) m_systemData.resolution.x, (GLsizei) m_systemData.resolution.y, 0, GL_RGBA, GL_FLOAT, m_bufferHost.data()); // RGBA32F from host buffer data.
       break;
-      
+
     case INTEROP_MODE_TEX:
       {
-        // Map the Texture object directly and copy the output buffer 
+        // Map the Texture object directly and copy the output buffer
         CU_CHECK( cuGraphicsMapResources(1, &m_cudaGraphicsResource, m_cudaStream )); // This is an implicit cuSynchronizeStream().
 
         CUarray dstArray = nullptr;
@@ -219,7 +222,7 @@ void DeviceSingleGPU::updateDisplayTexture()
         params.Height        = m_systemData.resolution.y;
         params.Depth         = 1;
 
-        CU_CHECK( cuMemcpy3D(&params) ); 
+        CU_CHECK( cuMemcpy3D(&params) );
 
         CU_CHECK( cuGraphicsUnmapResources(1, &m_cudaGraphicsResource, m_cudaStream) ); // This is an implicit cuSynchronizeStream().
       }
@@ -237,10 +240,10 @@ void DeviceSingleGPU::updateDisplayTexture()
   }
 }
 
-const void* DeviceSingleGPU::getOutputBufferHost() 
+const void* DeviceSingleGPU::getOutputBufferHost()
 {
   // activateContext();
-  
+
   MY_ASSERT(!m_isDirtyOutputBuffer);
 
   switch (m_interop)

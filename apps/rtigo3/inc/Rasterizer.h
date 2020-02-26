@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,14 +27,16 @@
  */
 
 #pragma once
- 
+
 #ifndef RASTERIZER_H
 #define RASTERIZER_H
 
-#include <GL/glew.h>
-#if defined( _WIN32 )
-#include <GL/wglew.h>
-#endif
+// includes OpenGL headers
+#include "inc/OpenGL_loader.h"
+// #include <GL/glew.h>
+// #if defined( _WIN32 )
+// #include <GL/wglew.h>
+// #endif
 
 #include "inc/Timer.h"
 #include "inc/TonemapperGUI.h"
@@ -56,7 +58,7 @@ public:
 
   void reshape(const int w, const int h);
   void display();
-  
+
   const int getNumDevices() const;
   const unsigned char* getUUID(const unsigned int index) const;
 
@@ -96,7 +98,7 @@ private:
   GLuint m_colorRampTexture;
 
   GLuint m_glslProgram;
-  
+
   GLuint m_vboAttributes;
   GLuint m_vboIndices;
 
