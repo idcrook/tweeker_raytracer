@@ -94,7 +94,7 @@ endif()
 # WARNING: CMake caches most recent explicit CLI -DCMAKE_BUILD_TYPE for this option
 
 # https://docs.conan.io/en/latest/reference/generators/cmakemulti.html?highlight=message#conan-cmake-silent-output
-#set(CONAN_CMAKE_SILENT_OUTPUT ON)
+set(CONAN_CMAKE_SILENT_OUTPUT ON)
 
 # Download automatically, you can also just copy the conan.cmake file
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
@@ -105,23 +105,10 @@ endif()
 
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 
-# remote needed to workaround for busted main repo libx11 dependency from glfw
-##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
-##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
-
-# conan_add_remote(
-#   NAME bincrafters
-#   URL https://api.bintray.com/conan/bincrafters/public-conan
-#   )
-
-# BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
-# mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
-
 # https://docs.conan.io/en/latest/reference/generators/cmake_find_package_multi.html
 conan_cmake_run(
   CONANFILE conanfile.txt
   BASIC_SETUP
-  # BUILD missing
   )
 
 # these are "imports" in conanfile.txt
@@ -132,18 +119,16 @@ set( IMGUI_BINDINGS
   bindings/imgui_impl_opengl3.cpp
 )
 
-# copy the conan outputs (headers and source for imgui bindings)
+# copy imgui resources from conan
 message(STATUS "Copying imgui bindings")
 FOREACH(input ${IMGUI_BINDINGS})
   get_filename_component(DEST_PATH "${input}" ABSOLUTE)
 
-  # the CONAN_RESULT is relative to the current binary directory
-  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESULT "${DEST_PATH}")
-  # message("\nPATH_CONAN_RESULT    = " " ${PATH_CONAN_RESULT}")
-  # message("DEST_PATH            = " " ${DEST_PATH}")
+  # PATH_CONAN_RESOURCE is relative to the current binary directory
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESOURCE "${DEST_PATH}")
 
   # configure_file respects Makefile timestamp dynamics
-  configure_file(${PATH_CONAN_RESULT} ${DEST_PATH} COPYONLY)
+  configure_file(${PATH_CONAN_RESOURCE} ${DEST_PATH} COPYONLY)
 
 ENDFOREACH( )
 
@@ -154,43 +139,18 @@ set(CMAKE_PREFIX_PATH
   ${CMAKE_PREFIX_PATH}
   )
 
-# related to conan: CONFIG option is important so CMake does not search for
-# modules into the default modules directory
+# related to conan: CONFIG option is important so CMake does not first
+# search for/find modules into the default modules directory
 find_package(imgui   CONFIG REQUIRED)
-#find_package(glfw   CONFIG REQUIRED) # switch to using system package instead
-#find_package(glew   CONFIG REQUIRED) # switch to using system package instead
+#find_package(glfw   CONFIG REQUIRED) # using system package instead
+#find_package(glew   CONFIG REQUIRED) # using system package instead
 find_package(assimp  CONFIG REQUIRED)
 
-find_package(GLFW REQUIRED)
-find_package(GLEW REQUIRED)
+find_package(GLFW REQUIRED) # ../CMake/FindGLFW.cmake
+find_package(GLEW REQUIRED) # system package
 #find_package(ASSIMP  REQUIRED)
 #find_package(DevIL_1_8_0 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is the system package version on ubuntu
-
-
-#message("\nPROJECT_NAME = " "${PROJECT_NAME}")
-
-#find_package(OpenGL REQUIRED)
-#find_package(GLFW REQUIRED)
-# find_package(GLEW REQUIRED)
-# find_package(OptiX7 REQUIRED)
-# find_package(CUDA 10.0 REQUIRED)
-#find_package(DevIL_1_8_0 REQUIRED)
-#find_package(ASSIMP REQUIRED)
-
-# set( IMGUI
-#   imgui/imconfig.h
-#   imgui/imgui.h
-#   imgui/imgui_impl_glfw_gl3.h
-#   imgui/imgui_internal.h
-#   imgui/stb_rect_pack.h
-#   imgui/stb_textedit.h
-#   imgui/stb_truetype.h
-#   imgui/imgui.cpp
-#   imgui/imgui_demo.cpp
-#   imgui/imgui_draw.cpp
-#   imgui/imgui_impl_glfw_gl3.cpp
-# )
 
 # TBD Usage report verbosity - Currently unimplemented
 set(OPTIX7GUI_USAGE_REPORT_VERBOSITY "0" CACHE STRING "Verbosity of OptiX usage report (0 disables reporting).")
@@ -374,21 +334,12 @@ add_custom_command(
 )
 
 
-# # DAR FIXME OptiX 6.0.0 and up do not support Kepler GPUs anymore. Generate code for the lowest Maxwell SM 5.0 instead.
-# NVCUDA_COMPILE_PTX( SOURCES ${SHADERS}
-#                     DEPENDENCIES ${SHADERS_HEADERS}
-#                     TARGET_PATH "${PTX_TARGET_DIR}/rtigo3_core"
-#                     GENERATED_FILES PTX_SOURCES
-#                     NVCC_OPTIONS "--gpu-architecture=compute_30" "--use_fast_math" "--relocatable-device-code=true" "--generate-line-info" "-I${OPTIX7_INCLUDE_DIR}" "-I${CMAKE_CURRENT_SOURCE_DIR}/shaders"
-#                   )
-
-# source_group( "imgui"           FILES ${IMGUI} )
-# source_group( "nvpro_math"      FILES ${NVPRO_MATH} )
-# source_group( "headers"         FILES ${HEADERS} )
-# source_group( "sources"         FILES ${SOURCES} )
-# source_group( "shaders"         FILES ${SHADERS} )
-# source_group( "shaders_headers" FILES ${SHADERS_HEADERS} )
-# source_group( "ptx"             FILES ${PTX_SOURCES})
+source_group( "nvpro_math"      FILES ${NVPRO_MATH} )
+source_group( "headers"         FILES ${HEADERS} )
+source_group( "sources"         FILES ${SOURCES} )
+source_group( "cuda_shaders"         FILES ${CUDA_SHADERS} )
+source_group( "cuda_shaders_headers" FILES ${CUDA_SHADERS_HEADERS} )
+#source_group( "ptx"             FILES ${PTX_SOURCES})
 
 #message("GLEW_INCLUDE_DIRS    = " "${GLEW_INCLUDE_DIRS}")
 #message("GLFW_INCLUDE_DIR     = " "${GLFW_INCLUDE_DIR}")
@@ -431,22 +382,12 @@ target_include_directories(rtigo3 PRIVATE
   ${IL_INCLUDE_DIR}
 )
 
-# include_directories(
-#   "."
-# #  "inc"
-#   # ${GLEW_INCLUDE_DIRS}
-#   # ${GLFW_INCLUDE_DIR}
-#   ${OPTIX7_INCLUDE_DIR}
-#   ${CUDA_TOOLKIT_INCLUDE}
-#   ${IL_INCLUDE_DIR}
-#   # ${ASSIMP_INCLUDE_DIRS}
-# )
-
 target_link_libraries( rtigo3 PUBLIC
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
   imgui::imgui
   assimp::assimp  # 5.0.1
   # glfw::glfw # switch to using system package instead
+  # glew::glew # using system package
   glfw  # v3.3
   GLEW  # v2.1
   ${CUDA_CUDA_LIBRARY} # driver library (for OptiX7)
@@ -457,29 +398,6 @@ target_link_libraries( rtigo3 PUBLIC
 )
 
 
-#message("OPENGL_gl_LIBRARY = " "${OPENGL_gl_LIBRARY}")
-#message("GLEW_LIBRARIES    = " "${GLEW_LIBRARIES}")
-#message("GLFW_LIBRARIES    = " "${GLFW_LIBRARIES}")
-#message("CUDA_CUDA_LIBRARY = " "${CUDA_CUDA_LIBRARY}")
-#message("IL_LIBRARIES      = " "${IL_LIBRARIES}")
-#message("ILU_LIBRARIES     = " "${ILU_LIBRARIES}")
-#message("ILUT_LIBRARIES    = " "${ILUT_LIBRARIES}")
-#message("ASSIMP_LIBRARIES  = " "${ASSIMP_LIBRARIES}")
-
-# target_link_libraries( rtigo3
-#   ${OPENGL_gl_LIBRARY}
-#   ${GLEW_LIBRARIES}
-#   ${GLFW_LIBRARIES}
-#   ${CUDA_CUDA_LIBRARY}
-#   ${IL_LIBRARIES}
-#   ${ILU_LIBRARIES}
-#   ${ILUT_LIBRARIES}
-#   ${ASSIMP_LIBRARIES}
-# )
-
 if (UNIX)
-  #target_link_libraries( rtigo3 dl )
   target_link_libraries( rtigo3 PRIVATE dl ${CMAKE_DL_LIBS})
 endif()
-
-#set_target_properties( rtigo3 PROPERTIES FOLDER "apps")
