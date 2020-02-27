@@ -1,11 +1,8 @@
-tweeker_raytracer
-=================
-
 Experimental raytracing test bed.
 
-![OptiX 7 - scene](assets/img/optix7_running.png)
+![rtigo3 - geometry scene](assets/img/rtigo3_geometry.png)
 
-Name is a play on my earlier project `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
+`tweeker_raytracer` is a play on name of an earlier project, [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was started, based on Ray Tracing In One Weekend series by Peter Shirley.
 
 Pre-requisites
 --------------
@@ -75,12 +72,26 @@ See respective [README.md](apps/OptixGui/README.md) for build instructions and `
 
 OptiX 7 imgui
 
--	Uses imgui (via GLFW + OpenGL3 via GLEW)
+-	Uses imgui, GLFW, OpenGL3 (via GLAD)
 	-	Installed using conan.io
 -	Uses DevIL image library
 -	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for its texture files
 
 See respective [README.md](apps/Optix7Gui/README.md) for build instructions and `conanfile.txt` for dependencies.
+
+`rtigo3`
+--------
+
+-	[rtigo3](apps/rtigo3) - based directly on https://github.com/NVIDIA/OptiX_Apps/tree/master/apps/rtigo3
+
+The implementation is using the CUDA Driver API.
+
+-	Uses imgui (via GLFW + OpenGL3 via GLEW)
+	-	Installed using conan.io
+-	Uses DevIL image library
+-	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for texture files and scene descriptions.
+
+See respective [README.md](apps/rtigo3/README.md) for build instructions and `conanfile.txt` for dependencies.
 
 Build on Linux
 --------------
@@ -89,6 +100,7 @@ IMPORTANT: Refer to respective readme for pointing to texture files.
 
 -	[OptixGui README](apps/OptixGui/README.md)
 -	[Optix7Gui README](apps/Optix7Gui/README.md)
+-	[rtigo3 README](apps/rtigo3/README.md)
 
 ```bash
 # navigate to top-level of this repo
@@ -103,9 +115,9 @@ cmake \
 cmake --build build --parallel 7
 
 # can specify a target
-cmake --build build --target optixGui --parallel 7
+cmake --build build --target optixGui  --parallel 7
 cmake --build build --target optix7Gui --parallel 7
-
+cmake --build build --target rtigo3    --parallel 7
 
 ```
 
@@ -125,6 +137,11 @@ OPTIX_SAMPLES_SDK_PTX_DIR=`pwd`/build/lib/ptx \
 
 # optix7Gui - FIXME: top-level build cannot locate internal texture images
 build/apps/Optix7Gui/bin/optix7Gui
+
+# rtigo3 - FIXME: app crashes if image textures are not found
+cd apps/rtigo3/data
+/path/to/tweeker_raytracer/build/apps/rtigo3/bin/rtigo3 \
+  -s ./system_rtigo3_cornell_box.txt -d ./scene_rtigo3_cornell_box.txt
 ```
 
 #### libGL / Mesa linked library loading issues
@@ -165,3 +182,14 @@ Image renders and screencaps from `optix7Gui`
 ---------------------------------------------
 
 ![OptiX 7 - compare to optix 6](assets/img/optix7_compare.png) optix7Gui, alternate environment, light, running in app.
+
+![OptiX 7 - scene](assets/img/optix7_running.png) optix7Gui, alternate environment, no light, running in app.
+
+Image renders and screencaps from `rtigo3`
+------------------------------------------
+
+![rtigo3 - cornell box scene](assets/img/rtigo3_cornell_box.png) rtigo3, system `system_rtigo3_cornell_box.txt`, description `scene_rtigo3_cornell_box.txt`
+
+![rtigo3 - geometry scene](assets/img/rtigo3_geometry.png) rtigo3, 1280x720, system `system_rtigo3_single_gpu_1280x720.txt`, description `scene_rtigo3_geometry.txt`
+
+![rtigo3 - instances scene](assets/img/rtigo3_instances.png) rtigo3, system `system_rtigo3_single_gpu_interop.txt` description `scene_rtigo3_instances.txt`

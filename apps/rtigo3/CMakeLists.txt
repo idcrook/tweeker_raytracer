@@ -24,12 +24,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+cmake_minimum_required(VERSION 3.10)
 
-cmake_minimum_required(VERSION 3.8)
+project( rtigo3 )
 
-project( Optix7Gui
-  VERSION 0.1.0
-  )
 message("\nTOP PROJECT = " "${CMAKE_PROJECT_NAME}")
 message("PROJECT_NAME = " "${PROJECT_NAME}")
 
@@ -107,23 +105,10 @@ endif()
 
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 
-# remote needed to workaround for busted main repo libx11 dependency from glfw
-##ERROR: Failed requirement 'libx11/1.6.8@bincrafters/stable' from 'glfw/3.3.2@bincrafters/stable'
-##ERROR: Unable to find 'libx11/1.6.8@bincrafters/stable' in remotes
-
-# conan_add_remote(
-#   NAME bincrafters
-#   URL https://api.bintray.com/conan/bincrafters/public-conan
-#   )
-
-# BUILD missing needed on -DCMAKE_BUILD_TYPE=Release due to:
-# mesa-glu/9.0.1@bincrafters/stable: WARN: Can't find a 'mesa-glu/9.0.1@bincrafters/stable' package for the specified settings, options and dependencies:
-
 # https://docs.conan.io/en/latest/reference/generators/cmake_find_package_multi.html
 conan_cmake_run(
   CONANFILE conanfile.txt
   BASIC_SETUP
-  # BUILD missing
   )
 
 # these are "imports" in conanfile.txt
@@ -134,18 +119,16 @@ set( IMGUI_BINDINGS
   bindings/imgui_impl_opengl3.cpp
 )
 
-# copy the conan outputs (headers and source for imgui bindings)
+# copy imgui resources from conan
 message(STATUS "Copying imgui bindings")
 FOREACH(input ${IMGUI_BINDINGS})
   get_filename_component(DEST_PATH "${input}" ABSOLUTE)
 
-  # the CONAN_RESULT is relative to the current binary directory
-  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESULT "${DEST_PATH}")
-  # message("\nPATH_CONAN_RESULT    = " " ${PATH_CONAN_RESULT}")
-  # message("DEST_PATH            = " " ${DEST_PATH}")
+  # PATH_CONAN_RESOURCE is relative to the current binary directory
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESOURCE "${DEST_PATH}")
 
   # configure_file respects Makefile timestamp dynamics
-  configure_file(${PATH_CONAN_RESULT} ${DEST_PATH} COPYONLY)
+  configure_file(${PATH_CONAN_RESOURCE} ${DEST_PATH} COPYONLY)
 
 ENDFOREACH( )
 
@@ -156,16 +139,17 @@ set(CMAKE_PREFIX_PATH
   ${CMAKE_PREFIX_PATH}
   )
 
-# related to conan: CONFIG option is important so CMake does not search for
-# modules into the default modules directory
-find_package(imgui  CONFIG REQUIRED)
-#find_package(glfw   CONFIG REQUIRED) # switch to using system package instead
-#find_package(glew   CONFIG REQUIRED) # switch to glad
-find_package(glad   CONFIG REQUIRED)
+# related to conan: CONFIG option is important so CMake does not first
+# search for/find modules into the default modules directory
+find_package(imgui   CONFIG REQUIRED)
+#find_package(glfw   CONFIG REQUIRED) # using system package instead
+#find_package(glew   CONFIG REQUIRED) # using system package instead
+find_package(assimp  CONFIG REQUIRED)
 
-find_package(GLFW REQUIRED)
+find_package(GLFW REQUIRED) # ../CMake/FindGLFW.cmake
+find_package(GLEW REQUIRED) # system package
+#find_package(ASSIMP  REQUIRED)
 #find_package(DevIL_1_8_0 REQUIRED)
-#find_package(DevIL_1_7_8 REQUIRED)
 find_package(DevIL REQUIRED)  # 1.7.8 is the system package version on ubuntu
 
 # TBD Usage report verbosity - Currently unimplemented
@@ -174,8 +158,8 @@ set_property(CACHE OPTIX7GUI_USAGE_REPORT_VERBOSITY PROPERTY STRINGS 0 1 2 3)
 
 option(OPTIX7GUI_USE_DEBUG_EXCEPTIONS "Enables advanced exception handling and error checking for debugging purposes." OFF)
 
-# NOTE below, without "--relocatable-device-code=true" flag, will receive warning:
-# /home/dpc/projects/learning/rt/tweeker_raytracer/apps/Optix7Gui/shaders/miss.cu(38): warning: extern declaration of the entity sysParameter is treated as a static definition
+# NOTE below, without "--relocatable-device-code=true" flag, will receive warnings like:
+# shaders/miss.cu(38): warning: extern declaration of the entity sysParameter is treated as a static definition
 
 # Flags to compile kernels to PTX
 if (OPTIX7GUI_USE_DEBUG_EXCEPTIONS)
@@ -204,31 +188,78 @@ string(REPLACE ";" " " CMAKE_CUDA_FLAGS "${local_cuda_flags}" )
 message("CMAKE_CUDA_FLAGS    = " "${CMAKE_CUDA_FLAGS}")
 
 
+
+
+# Reusing some routines from the NVIDIA nvpro-pipeline https://github.com/nvpro-pipeline/pipeline
+# Not built as a library, just using classes and functions directly.
+# Asserts replaced with my own versions.
+set( NVPRO_MATH
+  # Math fucntions:
+  dp/math/Config.h
+  dp/math/math.h
+  dp/math/Matmnt.h
+  dp/math/Quatt.h
+  dp/math/Trafo.h
+  dp/math/Vecnt.h
+  dp/math/src/Math.cpp
+  dp/math/src/Matmnt.cpp
+  dp/math/src/Quatt.cpp
+  dp/math/src/Trafo.cpp
+)
+
 set( HEADERS
   inc/Application.h
+  inc/Camera.h
   inc/CheckMacros.h
-  inc/Logger.h
+  inc/Device.h
+  inc/DeviceMultiGPULocalCopy.h
+  inc/DeviceMultiGPUPeerAccess.h
+  inc/DeviceMultiGPUZeroCopy.h
+  inc/DeviceSingleGPU.h
+  inc/MaterialGUI.h
   inc/MyAssert.h
   inc/Options.h
+  inc/Parser.h
   inc/Picture.h
-  inc/PinholeCamera.h
+  inc/Rasterizer.h
+  inc/Raytracer.h
+  inc/RaytracerMultiGPULocalCopy.h
+  inc/RaytracerMultiGPUPeerAccess.h
+  inc/RaytracerMultiGPUZeroCopy.h
+  inc/RaytracerSingleGPU.h
+  inc/SceneGraph.h
   inc/Texture.h
   inc/Timer.h
+  inc/TonemapperGUI.h
 )
 
 set( SOURCES
-  src/main.cpp
   src/Application.cpp
+  src/Assimp.cpp
   src/Box.cpp
+  src/Camera.cpp
+  src/Device.cpp
+  src/DeviceMultiGPULocalCopy.cpp
+  src/DeviceMultiGPUPeerAccess.cpp
+  src/DeviceMultiGPUZeroCopy.cpp
+  src/DeviceSingleGPU.cpp
+  src/main.cpp
   src/Options.cpp
   src/Parallelogram.cpp
+  src/Parser.cpp
   src/Picture.cpp
-  src/PinholeCamera.cpp
   src/Plane.cpp
-  src/Torus.cpp
+  src/Rasterizer.cpp
+  src/Raytracer.cpp
+  src/RaytracerMultiGPULocalCopy.cpp
+  src/RaytracerMultiGPUPeerAccess.cpp
+  src/RaytracerMultiGPUZeroCopy.cpp
+  src/RaytracerSingleGPU.cpp
+  src/SceneGraph.cpp
   src/Sphere.cpp
   src/Texture.cpp
   src/Timer.cpp
+  src/Torus.cpp
 )
 
 # Prefix the shaders with the full path name to allow stepping through errors with F8.
@@ -236,39 +267,43 @@ set( CUDA_SHADERS
   # Core shaders.
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/anyhit.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/closesthit.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/raygeneration.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/exception.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/miss.cu
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/raygeneration.cu
 
   # Direct callables
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/lens_shader.cu
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light_sample.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bsdf_diffuse_reflection.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bsdf_specular_reflection.cu
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bsdf_specular_reflection_transmission.cu
+  # BxDFs (BRDF, BTDF, BSDF implementations)
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bxdf_diffuse.cu
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bxdf_specular.cu
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/bxdf_ggx_smith.cu
+
+  # Application kernels
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compositor.cu
 )
 
 set( CUDA_SHADERS_HEADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/app_config.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/camera_definition.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/compositor_data.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/config.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/function_indices.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/half_common.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/light_definition.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/material_parameter.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/material_definition.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/per_ray_data.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/random_number_generators.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/system_parameter.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader_common.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/shaders/system_data.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vector_math.h
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vertex_attributes.h
 )
 
-
 # CUDA_SHADERS_HEADERS are colocated in same directory
-add_library(shadersPTX OBJECT ${CUDA_SHADERS})
-set_property(TARGET shadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
-target_include_directories(shadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
+add_library(rtigo3ShadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS} )
+set_property(TARGET rtigo3ShadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
+target_include_directories(rtigo3ShadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
 # where PTX.h will get placed
-target_include_directories(shadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_include_directories(rtigo3ShadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 # Retrieve bin2c util
 get_filename_component(cuda_compiler_bin "${CMAKE_CUDA_COMPILER}" DIRECTORY)
@@ -290,77 +325,82 @@ add_custom_command(
     OUTPUT "${headerPathPTX}"
     COMMAND ${CMAKE_COMMAND}
     "-DBIN_TO_C_COMMAND=${bin_to_c}"
-    "-DOBJECTS=$<TARGET_OBJECTS:shadersPTX>"
+    "-DOBJECTS=$<TARGET_OBJECTS:rtigo3ShadersPTX>"
     "-DOUTPUT=${headerPathPTX}"
     -P ${PROJECT_SOURCE_DIR}/../CMake/bin2c_wrapper.cmake
     VERBATIM
-    DEPENDS $<TARGET_OBJECTS:shadersPTX>
+    DEPENDS $<TARGET_OBJECTS:rtigo3ShadersPTX>
     COMMENT "Converting PTX files to a C header" "${headerPathPTX}"
 )
 
 
-add_executable( optix7Gui
+source_group( "nvpro_math"      FILES ${NVPRO_MATH} )
+source_group( "headers"         FILES ${HEADERS} )
+source_group( "sources"         FILES ${SOURCES} )
+source_group( "cuda_shaders"         FILES ${CUDA_SHADERS} )
+source_group( "cuda_shaders_headers" FILES ${CUDA_SHADERS_HEADERS} )
+#source_group( "ptx"             FILES ${PTX_SOURCES})
+
+#message("GLEW_INCLUDE_DIRS    = " "${GLEW_INCLUDE_DIRS}")
+#message("GLFW_INCLUDE_DIR     = " "${GLFW_INCLUDE_DIR}")
+#message("CUDA_TOOLKIT_INCLUDE = " "${CUDA_TOOLKIT_INCLUDE}")
+#message("IL_INCLUDE_DIR       = " "${IL_INCLUDE_DIR}")
+#message("ASSIMP_INCLUDE_DIRS  = " "${ASSIMP_INCLUDE_DIRS}")
+
+add_executable( rtigo3
   ${IMGUI_BINDINGS}
+  ${NVPRO_MATH}
   ${HEADERS}
   ${SOURCES}
+  # ${SHADERS_HEADERS}
+  # ${SHADERS}
+  # ${PTX_SOURCES}
   ${headerPathPTX}
-  )
+)
 
-add_dependencies(optix7Gui shadersPTX)
-
-message("CUDA_TOOLKIT_INCLUDE  = " "${CUDA_TOOLKIT_INCLUDE}")
-#message("CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES  = " "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+add_dependencies(rtigo3 rtigo3ShadersPTX)
 
 # add_definitions(
 #   # Disable warnings for file operations fopen etc.
 #   "-D_CRT_SECURE_NO_WARNINGS"
 # )
-target_compile_definitions(optix7Gui PRIVATE "_CRT_SECURE_NO_WARNINGS")
+target_compile_definitions(rtigo3 PRIVATE "_CRT_SECURE_NO_WARNINGS")
 
 # select which opengl loader
-target_compile_definitions(optix7Gui PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLAD)
+target_compile_definitions(rtigo3 PUBLIC IMGUI_IMPL_OPENGL_LOADER_GLEW)
 
-
-target_include_directories(optix7Gui PUBLIC
+target_include_directories(rtigo3 PUBLIC
   "."
   $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   # $<INSTALL_INTERFACE:$<INSTALL_PREFIX>/include>
 )
-target_include_directories(optix7Gui PRIVATE
+target_include_directories(rtigo3 PRIVATE
+  "."
   ${CUDA_TOOLKIT_INCLUDE}
   ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
   ${OPTIX7_INCLUDE_DIR}
   ${IL_INCLUDE_DIR}
 )
 
-
-target_link_libraries( optix7Gui PUBLIC
+target_link_libraries( rtigo3 PUBLIC
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
   imgui::imgui
-  # glew::glew # switch to using system package instead
-  #GLEW  # v2.1 - using glad instead
-  glad::glad
+  assimp::assimp  # 5.0.1
   # glfw::glfw # switch to using system package instead
+  # glew::glew # using system package
   glfw  # v3.3
-  #${CUDA_LIBRARIES} # runtime libraries
+  GLEW  # v2.1
   ${CUDA_CUDA_LIBRARY} # driver library (for OptiX7)
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
+  ${ASSIMP_LIBRARIES}
 )
 
-if (UNIX)
-  target_link_libraries( optix7Gui PRIVATE dl ${CMAKE_DL_LIBS})
-endif()
 
-#
-message("OPENGL_gl_LIBRARY     = " " ${OPENGL_gl_LIBRARY}")
-message("OPENGL_opengl_LIBRARY = " " ${OPENGL_opengl_LIBRARY}")
-message("OPENGL_glx_LIBRARY    = " " ${OPENGL_glx_LIBRARY}")
-message("OPENGL_LIBRARIES      = " " ${OPENGL_LIBRARIES}")
-#
-# message("CUDA_CUDA_LIBRARY     = " " ${CUDA_CUDA_LIBRARY}")
-message("CUDA_LIBRARIES        = " " ${CUDA_LIBRARIES}")
+if (UNIX)
+  target_link_libraries( rtigo3 PRIVATE dl ${CMAKE_DL_LIBS})
+endif()
 
 if ("${CMAKE_BINARY_DIR}" STREQUAL "${PROJECT_BINARY_DIR}")
   set(relative "./")
@@ -369,9 +409,9 @@ else()
 endif()
 
 # print out
-string(REPLACE "${CMAKE_SOURCE_DIR}/build/" ${relative} target_bin "${CMAKE_CURRENT_BINARY_DIR}/bin/optix7Gui")
+string(REPLACE "${CMAKE_SOURCE_DIR}/build/" ${relative} target_bin "${CMAKE_CURRENT_BINARY_DIR}/bin/rtigo3")
 
 message(STATUS "Will build ${target_bin}")
 
-add_custom_command(TARGET optix7Gui POST_BUILD
+add_custom_command(TARGET rtigo3 POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --cyan " ${target_bin}")
