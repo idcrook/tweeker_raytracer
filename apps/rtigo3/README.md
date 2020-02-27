@@ -50,6 +50,10 @@ cd ../data/
 ../build/bin/rtigo3 \
   -s ./system_rtigo3_cornell_box.txt -d ./scene_rtigo3_cornell_box.txt
 
+# another example
+rtigo3 --width 1280 --height 720 \
+  -s system_rtigo3_single_gpu_1280x720.txt -d scene_rtigo3_geometry.txt
+
 ```
 
 Top-level build

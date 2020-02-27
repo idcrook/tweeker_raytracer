@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -58,6 +58,7 @@
 // 0 == Disable clock() usage and time view display.
 // 1 == Enable clock() usage and time view display.
 #define USE_TIME_VIEW 0
+//#define USE_TIME_VIEW 1
 
 #define INTEROP_MODE_OFF 0
 #define INTEROP_MODE_TEX 1
