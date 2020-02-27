@@ -1,11 +1,8 @@
-tweeker_raytracer
-=================
-
 Experimental raytracing test bed.
 
 ![rtigo3 - geometry scene](assets/img/rtigo3_geometry.png)
 
-Name is a play on my earlier project `weeker_raytracer`. This repo is spun out of [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was based on Ray Tracing In One Weekend series by Peter Shirley.
+`tweeker_raytracer` is a play on name of an earlier project, [weeker_raytracer](https://github.com/idcrook/weeker_raytracer), which itself was started, based on Ray Tracing In One Weekend series by Peter Shirley.
 
 Pre-requisites
 --------------
