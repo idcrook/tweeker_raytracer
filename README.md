@@ -75,7 +75,7 @@ See respective [README.md](apps/OptixGui/README.md) for build instructions and `
 
 OptiX 7 imgui
 
--	Uses imgui (via GLFW + OpenGL3 via GLEW)
+-	Uses imgui, GLFW, OpenGL3 (via GLAD)
 	-	Installed using conan.io
 -	Uses DevIL image library
 -	Assumes [OptiX_Apps](https://github.com/NVIDIA/OptiX_Apps) repo is available for its texture files
@@ -194,3 +194,5 @@ Image renders and screencaps from `rtigo3`
 ![rtigo3 - cornell box scene](assets/img/rtigo3_cornell_box.png) rtigo3, system `system_rtigo3_cornell_box.txt`, description `scene_rtigo3_cornell_box.txt`
 
 ![rtigo3 - geometry scene](assets/img/rtigo3_geometry.png) rtigo3, 1280x720, system `system_rtigo3_single_gpu_1280x720.txt`, description `scene_rtigo3_geometry.txt`
+
+![rtigo3 - instances scene](assets/img/rtigo3_instances.png) rtigo3, system `system_rtigo3_single_gpu_interop.txt` description `scene_rtigo3_instances.txt`
