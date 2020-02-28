@@ -298,12 +298,16 @@ set( CUDA_SHADERS_HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/shaders/vertex_attributes.h
 )
 
+# see alternatives: https://gitlab.kitware.com/robertmaynard/cmake_cuda_tests
+
 # CUDA_SHADERS_HEADERS are colocated in same directory
-add_library(rtigo3ShadersPTX OBJECT ${CUDA_SHADERS} ${CUDA_SHADERS_HEADERS} )
+add_library(rtigo3ShadersPTX OBJECT ${CUDA_SHADERS} )
 set_property(TARGET rtigo3ShadersPTX PROPERTY CUDA_PTX_COMPILATION ON)
+
 target_include_directories(rtigo3ShadersPTX PUBLIC   ${OPTIX7_INCLUDE_DIR})
 # where PTX.h will get placed
 target_include_directories(rtigo3ShadersPTX PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/include)
+set(headerPathPTX ${CMAKE_CURRENT_BINARY_DIR}/include/PTX.h)
 
 # Retrieve bin2c util
 get_filename_component(cuda_compiler_bin "${CMAKE_CUDA_COMPILER}" DIRECTORY)
@@ -320,7 +324,6 @@ if(NOT bin_to_c)
 endif()
 
 # Embed PTX in header file that will be built into program
-set(headerPathPTX ${CMAKE_CURRENT_BINARY_DIR}/include/PTX.h)
 add_custom_command(
     OUTPUT "${headerPathPTX}"
     COMMAND ${CMAKE_COMMAND}
@@ -329,17 +332,15 @@ add_custom_command(
     "-DOUTPUT=${headerPathPTX}"
     -P ${PROJECT_SOURCE_DIR}/../CMake/bin2c_wrapper.cmake
     VERBATIM
-    DEPENDS $<TARGET_OBJECTS:rtigo3ShadersPTX>
-    COMMENT "Converting PTX files to a C header" "${headerPathPTX}"
+    DEPENDS $<TARGET_OBJECTS:rtigo3ShadersPTX> ${CUDA_SHADERS_HEADERS}
+    COMMENT "Converting PTX files to a C header"
 )
-
 
 source_group( "nvpro_math"      FILES ${NVPRO_MATH} )
 source_group( "headers"         FILES ${HEADERS} )
 source_group( "sources"         FILES ${SOURCES} )
 source_group( "cuda_shaders"         FILES ${CUDA_SHADERS} )
 source_group( "cuda_shaders_headers" FILES ${CUDA_SHADERS_HEADERS} )
-#source_group( "ptx"             FILES ${PTX_SOURCES})
 
 #message("GLEW_INCLUDE_DIRS    = " "${GLEW_INCLUDE_DIRS}")
 #message("GLFW_INCLUDE_DIR     = " "${GLFW_INCLUDE_DIR}")
@@ -352,9 +353,7 @@ add_executable( rtigo3
   ${NVPRO_MATH}
   ${HEADERS}
   ${SOURCES}
-  # ${SHADERS_HEADERS}
-  # ${SHADERS}
-  # ${PTX_SOURCES}
+  ${CUDA_SHADERS_HEADERS}
   ${headerPathPTX}
 )
 
@@ -394,7 +393,6 @@ target_link_libraries( rtigo3 PUBLIC
   ${IL_LIBRARIES}
   ${ILU_LIBRARIES}
   ${ILUT_LIBRARIES}
-  ${ASSIMP_LIBRARIES}
 )
 
 
