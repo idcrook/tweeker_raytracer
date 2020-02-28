@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (c) 2013-2020, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,7 +60,7 @@
 
 // 0 = RGB rendering and denoising
 // 1 = RGB+albedo rendering and denoising
-#define USE_DENOISER_ALBEDO 0
+#define USE_DENOISER_ALBEDO 1
 
 // Requires USE_DENOISER_ALBEDO == 1
 // 1 = RGB+albedo+normal rendering and denoising.

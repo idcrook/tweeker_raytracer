@@ -1,7 +1,7 @@
+Install
+=======
 
-# Install
-
-- Ubuntu Linux x64 19.10
+-	Ubuntu Linux x64 19.10
 
 Downloaded SDKs from Nvidia developer site.
 
@@ -16,9 +16,8 @@ sh NVIDIA-OptiX-SDK-7.0.0-linux64.sh --skip-license \
    --prefix=/usr/local/nvidia --include-subdir
 ```
 
-
-# configure gcc
-
+configure gcc
+=============
 
 ```
 sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 10
@@ -33,9 +32,16 @@ sudo update-alternatives --config g++
 
 Must set to gcc-8 for compiles to work
 
+these are needed for better debugging of std:: C++ code and data within gdb:
 
+```
+sudo apt install libstdc++6-8-dbg
+dpkg --listfiles  libstdc++6-8-dbg
+export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/debug:$LD_LIBRARY_PATH
+```
 
-## install SDK examples
+install SDK examples
+--------------------
 
 Optix 6.5
 
@@ -46,7 +52,6 @@ cd /usr/local/nvidia/NVIDIA-OptiX-SDK-6.5.0-linux64/SDK
 cmake -B build .
 cmake --build build
 ```
-
 
 Optix 7.0
 

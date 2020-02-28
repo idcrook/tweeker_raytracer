@@ -2334,6 +2334,8 @@ bool Application::screenshot(const bool tonemap)
   // Free all resources associated with the DevIL image
   ilDeleteImages(1, &imageID);
 
+  MY_ASSERT(!error)
+
   return false;
 }
 

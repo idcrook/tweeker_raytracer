@@ -1,8 +1,17 @@
 
 * TODOs for this project
 
+** FIXMEs
+
+- [ ] image and PTX locating
+ - [ ] optixGui - update path handling for PTX directory
+ - [ ] optix7Gui - FIXME: top-level build cannot locate internal texture images
+ - [ ] rtigo3 - FIXME: app crashes if image textures are not found
+
 ** code cleanup tasks
 
 
+* DONE
 
-x* DONE
+
+ - [X] rtigo3: save image : just need to make sure any directory from screenshot config ("./screenshots/" directory, e.g.) exists

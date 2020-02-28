@@ -95,13 +95,21 @@ cmake --build . --target rtigo3 --parallel 7
 
 ```
 
+Installings
+
+```
+sudo apt libstdc++6-8-dbg
+```
+
 setting up in `cuda-gdb`
 
 ```shell
-cd /home/dpc/projects/learning/rt/tweeker_raytracer/apps/rtigo3/build
-file bin/rtigo3
+cd /home/dpc/projects/learning/rt/tweeker_debug/apps/rtigo3/data
 
-run -s /home/dpc/projects/learning/rt/github/optix/OptiX_Apps/data/system_rtigo3_cornell_box.txt -d /home/dpc/projects/learning/rt/github/optix/OptiX_Apps/data/scene_rtigo3_cornell_box.txt
+file /home/dpc/projects/learning/rt/tweeker_debug/apps/rtigo3/build/bin/rtigo3
+set env LD_LIBRARY_PATH /usr/lib/x86_64-linux-gnu/debug
+
+run --width 1280 --height 720 -m 1 -s ./system_rtigo3_single_gpu_1280x720.txt -d ./scene_rtigo3_geometry.txt
 ```
 
 using the `cuda-gdb` for `gdb` in emacs
