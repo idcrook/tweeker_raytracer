@@ -23,15 +23,19 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      CACHE STRING "")
+endif()
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.11..3.13)
 
 project( rtigo3 )
 
 message("\nTOP PROJECT = " "${CMAKE_PROJECT_NAME}")
 message("PROJECT_NAME = " "${PROJECT_NAME}")
 
-cmake_policy(VERSION 3.8)
+cmake_policy(VERSION 2.8)
 
 if( POLICY CMP0072 )
   # FindOpenGL prefers GLVND by default when available
@@ -93,23 +97,35 @@ if(UNIX AND NOT CMAKE_BUILD_TYPE)
 endif()
 # WARNING: CMake caches most recent explicit CLI -DCMAKE_BUILD_TYPE for this option
 
-# https://docs.conan.io/en/latest/reference/generators/cmakemulti.html?highlight=message#conan-cmake-silent-output
-set(CONAN_CMAKE_SILENT_OUTPUT ON)
+# # https://docs.conan.io/en/latest/reference/generators/cmakemulti.html?highlight=message#conan-cmake-silent-output
+# set(CONAN_CMAKE_SILENT_OUTPUT ON)
 
-# Download automatically, you can also just copy the conan.cmake file
-if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-   message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-   file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/master/conan.cmake"
-                  "${CMAKE_BINARY_DIR}/conan.cmake")
-endif()
+# # Download automatically, you can also just copy the conan.cmake file
+# if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+#    message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+#    file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/master/conan.cmake"
+#                   "${CMAKE_BINARY_DIR}/conan.cmake")
+# endif()
 
-include(${CMAKE_BINARY_DIR}/conan.cmake)
+# include(${CMAKE_BINARY_DIR}/conan.cmake)
 
-# https://docs.conan.io/en/latest/reference/generators/cmake_find_package_multi.html
-conan_cmake_run(
-  CONANFILE conanfile.txt
-  BASIC_SETUP
-  )
+# # https://docs.conan.io/en/latest/reference/generators/cmake_find_package_multi.html
+# conan_cmake_run(
+#   CONANFILE conanfile.txt
+#   BASIC_SETUP
+#   )
+
+
+find_path(IMGUI_INCLUDE_DIR imgui.h)
+set(IMGUI_BINDINGS_DIR ${IMGUI_INCLUDE_DIR}/../bindings/)
+message("IMGUI_INCLUDE_DIR     = " "${IMGUI_INCLUDE_DIR}")
+message("IMGUI_BINDINGS_DIR     = " "${IMGUI_BINDINGS_DIR}")
+find_library(ASSIMP_ZLIB_LIBRARY z)
+find_library(ASSIMP_IRRXML_LIBRARY IrrXML)
+
+message("ASSIMP_ZLIB_LIBRARY   = " "${ASSIMP_ZLIB_LIBRARY}")
+message("ASSIMP_IRRXML_LIBRARY = " "${ASSIMP_IRRXML_LIBRARY}")
+
 
 # these are "imports" in conanfile.txt
 set( IMGUI_BINDINGS
@@ -125,10 +141,11 @@ FOREACH(input ${IMGUI_BINDINGS})
   get_filename_component(DEST_PATH "${input}" ABSOLUTE)
 
   # PATH_CONAN_RESOURCE is relative to the current binary directory
-  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${CMAKE_CURRENT_BINARY_DIR}/" PATH_CONAN_RESOURCE "${DEST_PATH}")
+  string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "${IMGUI_BINDINGS_DIR}/../" PATH_CONAN_RESOURCE "${DEST_PATH}")
 
   # configure_file respects Makefile timestamp dynamics
   configure_file(${PATH_CONAN_RESOURCE} ${DEST_PATH} COPYONLY)
+  #message(STATUS "${PATH_CONAN_RESOURCE} -> ${DEST_PATH}")
 
 ENDFOREACH( )
 
@@ -139,12 +156,15 @@ set(CMAKE_PREFIX_PATH
   ${CMAKE_PREFIX_PATH}
   )
 
+message("CMAKE_PREFIX_PATH    = " "${CMAKE_PREFIX_PATH}")
+
 # related to conan: CONFIG option is important so CMake does not first
 # search for/find modules into the default modules directory
 find_package(imgui   CONFIG REQUIRED)
 #find_package(glfw   CONFIG REQUIRED) # using system package instead
 #find_package(glew   CONFIG REQUIRED) # using system package instead
 find_package(assimp  CONFIG REQUIRED)
+message("ASSIMP_LIBRARIES    = " "${ASSIMP_LIBRARIES}")
 
 find_package(GLFW REQUIRED) # ../CMake/FindGLFW.cmake
 find_package(GLEW REQUIRED) # system package
@@ -381,10 +401,12 @@ target_include_directories(rtigo3 PRIVATE
   ${IL_INCLUDE_DIR}
 )
 
-target_link_libraries( rtigo3 PUBLIC
+target_link_libraries( rtigo3 PRIVATE
   OpenGL::OpenGL # Defined to libOpenGL if the system is GLVND-based. OpenGL::GL
   imgui::imgui
   assimp::assimp  # 5.0.1
+  ${ASSIMP_ZLIB_LIBRARY}
+  ${ASSIMP_IRRXML_LIBRARY}
   # glfw::glfw # switch to using system package instead
   # glew::glew # using system package
   glfw  # v3.3

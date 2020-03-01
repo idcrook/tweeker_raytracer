@@ -1,7 +1,7 @@
 [requires]
-imgui/1.75
+#imgui/1.75
 
-assimp/5.0.1
+# assimp/5.0.1
 
 # # switch to GLEW (system)
 # glad/0.1.33
@@ -9,8 +9,8 @@ assimp/5.0.1
 [generators]
 cmake_find_package_multi
 
-[imports]
-./res/bindings, imgui_impl_glfw.h      -> ./bindings
-./res/bindings, imgui_impl_glfw.cpp    -> ./bindings
-./res/bindings, imgui_impl_opengl3.h   -> ./bindings
-./res/bindings, imgui_impl_opengl3.cpp -> ./bindings
+# [imports]
+# ./res/bindings, imgui_impl_glfw.h      -> ./bindings
+# ./res/bindings, imgui_impl_glfw.cpp    -> ./bindings
+# ./res/bindings, imgui_impl_opengl3.h   -> ./bindings
+# ./res/bindings, imgui_impl_opengl3.cpp -> ./bindings
