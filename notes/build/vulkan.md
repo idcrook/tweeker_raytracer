@@ -60,7 +60,7 @@ will need to install from single-user mode
 -	switch to virtual console: <Ctrl>\-<Alt>\-<kbd>F2</kbd>
 -	uninstall ubuntu ppa driver:
 
-`sudo apt remote nvidia-driver-440`
+`sudo apt remove nvidia-driver-440`
 
 ```
 sudo service gdm3 stop
